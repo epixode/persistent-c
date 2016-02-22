@@ -1,0 +1,24 @@
+{
+  "name": "persistent-c",
+  "version": "0.1.0",
+  "description": "A C language step-by-step evaluator written in JavaScript and using persistent (immutable) data structures.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/epixode/persistent-c.git"
+  },
+  "keywords": [
+    "C",
+    "evaluator",
+    "persistent"
+  ],
+  "author": "epixode (https://epixode.fr)",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/epixode/persistent-c/issues"
+  },
+  "homepage": "https://github.com/epixode/persistent-c#readme"
+}
