@@ -2,9 +2,10 @@
   "name": "persistent-c",
   "version": "0.1.0",
   "description": "A C language step-by-step evaluator written in JavaScript and using persistent (immutable) data structures.",
-  "main": "index.js",
+  "main": "lib/index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "node_modules/.bin/babel src --out-dir lib",
+    "test": "node_modules/.bin/babel-tape-runner ./spec/**/*.spec.js | node_modules/.bin/tap-spec"
   },
   "repository": {
     "type": "git",
@@ -20,5 +21,14 @@
   "bugs": {
     "url": "https://github.com/epixode/persistent-c/issues"
   },
-  "homepage": "https://github.com/epixode/persistent-c#readme"
+  "homepage": "https://github.com/epixode/persistent-c#readme",
+  "devDependencies": {
+    "babel-cli": "^6.4.5",
+    "babel-plugin-transform-object-rest-spread": "^6.1.18",
+    "babel-preset-es2015": "^6.3.13",
+    "babel-tape-runner": "^2.0.0",
+    "tap-spec": "^4.1.1",
+    "tape": "^4.4.0",
+    "tape-catch": "^1.0.4"
+  }
 }
