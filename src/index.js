@@ -38,7 +38,7 @@ export const start = function (context) {
   return stepInto(state, {continue: false});
 };
 
-export const stepMicro = function (state, options) {
+export const step = function (state, options) {
   // End of program?
   if (!state.control)
     return state;
@@ -129,66 +129,14 @@ export const stepMicro = function (state, options) {
   return newState;
 };
 
-export const stepExpr = function (state, options) {
-  // Execute micro-steps until we cross any (stmt, expr) boundary, going down.
-  do {
-    const prevState = state;
-    state = stepMicro(prevState, options);
-    if (state === prevState || !state.control || state.error)
-      return state;
-    // TODO: keep going if the expression is trivial (literal, var. ref.)
-  } while (state.direction === 'up' || !state.control.seq);
-  return state;
+export const outOfCurrentStmt = function (state) {
+  return state.direction === 'down' && state.control.seq === 'stmt';
 };
 
-export const stepInto = function (state, options) {
-  if (options.continue) {
-    // Execute micro-steps until we cross a statement boundary, going down.
-    do {
-      const prevState = state;
-      state = stepMicro(prevState, options);
-      if (state === prevState || !state.control || state.error)
-        return state;
-    } while (state.direction === 'up' || state.control.seq !== 'stmt');
-  }
-  // Go down as much as possible into compound statements.
-  while (state.direction === 'down' && /^(CompoundStmt|IfStmt|WhileStmt|DoStmt|ForStmt)$/.test(state.control.node[0])) {
-    const prevState = state;
-    state = stepMicro(prevState, options);
-    if (state === prevState || !state.control || state.error)
-      return state;
-  }
-  return state;
+export const intoNextStmt = function (state) {
+  return !/^(CompoundStmt|IfStmt|WhileStmt|DoStmt|ForStmt)$/.test(state.control.node[0]);
 };
 
-export const stepOut = function (state, options) {
-  let scope = state.scope;
-  while (scope.kind !== 'function') {
-    scope = scope.parent;
-    if (!scope)
-      return state;
-  }
-  scope = scope.parent;
-  do {
-    const prevState = state;
-    state = stepMicro(prevState, options);
-    if (state === prevState || !state.control || state.error)
-      return state;
-  } while (state.scope !== scope);
-  return state;
-};
-
-export const run = function (state, options) {
-  while (state.control) {
-    const prevState = state;
-    state = stepMicro(prevState, options);
-    if (state === prevState || state.error)
-      return state;
-  }
-  return state;
-};
-
-export const stepOver = function (state) {
-  // TODO
-  return state;
+export const intoNextExpr = function (state) {
+  return state.direction === 'down' && state.control.seq;
 };
