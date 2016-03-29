@@ -1,6 +1,6 @@
 {
   "name": "persistent-c",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "main": "./lib/index.js",
   "description": "A C language step-by-step evaluator written in JavaScript and using persistent (immutable) data structures.",
   "scripts": {
