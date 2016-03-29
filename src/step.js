@@ -16,6 +16,7 @@ with the seq property set to true.  In C, sequence points occur:
 import {
   integerValue, unboxAsInteger,
   evalUnaryOperation, evalBinaryOperation, evalCast} from './value';
+import {sizeOfType} from './type';
 
 const one = integerValue(1);
 
