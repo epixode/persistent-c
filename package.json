@@ -32,6 +32,7 @@
     "tape": "^4.4.0"
   },
   "jspm": {
+    "main": "./index.js",
     "directories": {
       "lib": "lib"
     },
