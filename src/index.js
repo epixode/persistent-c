@@ -34,8 +34,7 @@ export const start = function (context) {
   const scope = {key: 0, limit: memory.limit};
   const state = {globalMap, memory, control, scope};
 
-  // Use stepInto to descend into the first statement of the main function.
-  return stepInto(state, {continue: false});
+  return state;
 };
 
 export const step = function (state, options) {
