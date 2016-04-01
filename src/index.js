@@ -113,7 +113,7 @@ export const step = function (state, options) {
           newState.memory = {parent: newState.memory, address, value: effect[2]};
         }
       } else {
-        options.onEffect(effect);
+        newState = options.onEffect(newState, effect);
       }
     });
   }
