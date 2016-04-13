@@ -1,6 +1,7 @@
 
 import {sizeOfType} from './type';
 import {getStep} from './step';
+export {deref} from './memory';
 
 export const start = function (context) {
   const {decls, builtins} = context;

@@ -17,6 +17,7 @@ import {
   integerValue, unboxAsInteger,
   evalUnaryOperation, evalBinaryOperation, evalCast} from './value';
 import {sizeOfType} from './type';
+import {deref} from './memory';
 
 const one = integerValue(1);
 
@@ -56,32 +57,6 @@ const sizeOfExpr = function (state, node) {
       alert ('sizeof expr ' + node[0]);
       return 0;
   }
-};
-
-const deref = function (state, ref, ty) {
-
-  if (ref === undefined) {
-    alert('dereferenced undefined pointer');
-    return undefined;
-  }
-
-  // A reference to a builtin or a user function evaluates to itself.
-  if (ref[0] === 'builtin' || ref[0] === 'function')
-    return ref;
-
-  if (ref[0] === 'pointer') {
-    const address = ref[1];
-    // XXX read at type ty
-    let memory = state.memory;
-    while (memory) {
-      if (memory.address === address) {
-        return memory.value;
-      }
-      memory = memory.parent;
-    }
-  }
-
-  return 0;
 };
 
 const enter = function (node, cont, attrs) {
