@@ -14,7 +14,7 @@ with the seq property set to true.  In C, sequence points occur:
 */
 
 import {
-  integerValue, unboxAsInteger,
+  integerValue, floatingValue, unboxAsInteger,
   evalUnaryOperation, evalBinaryOperation, evalCast} from './value';
 import {sizeOfType} from './type';
 import {deref} from './memory';
@@ -513,7 +513,7 @@ const stepCharacterLiteral = function (state, control) {
 };
 
 const stepFloatingLiteral = function (state, control) {
-  const number = parseFloat(control.node[1].value);
+  const number = control.node[1].value;
   return {
     control: control.cont,
     result: floatingValue(number)
