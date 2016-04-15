@@ -664,7 +664,7 @@ export const getStep = function (state, control) {
   case 'ConstantArrayType':
     return stepConstantArrayType(state, control);
   case 'FunctionProtoType':
-  case 'FunctionNoPrototype': // XXX spelling, is it ok to call stepFunctionProtoType?
+  case 'FunctionNoProtoType':
     return stepFunctionProtoType(state, control);
   case 'ParmVarDecl':
     return stepParmVarDecl(state, control);
