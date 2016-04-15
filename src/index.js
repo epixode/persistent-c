@@ -1,7 +1,10 @@
 
-import {sizeOfType} from './type';
+// import {functionType, pointerType, scalarTypes} from './type';
+import {allocate, writeValue} from './memory';
+import {PointerValue} from './value';
 import {getStep} from './step';
-export {deref} from './memory';
+
+export {readValue} from './memory';
 
 export const start = function (context) {
   const {decls, builtins} = context;
@@ -11,20 +14,22 @@ export const start = function (context) {
   // of that function.
   let currentNode = null;
   const globalMap = {};
+  // const intFunc = functionType(scalarTypes['int'], []);
   decls.forEach(function (node) {
     if (node[0] === 'FunctionDecl') {
       const name = node[2][0][1].identifier;
-      // TODO: evaluate the types!
+      // XXX: evaluate the types!
       if (builtins && name in builtins) {
-        globalMap[name] = {name, type: ['function'], ref: ['builtin', builtins[name]]};
+        globalMap[name] = {name, value: ['builtin', builtins[name]]};
       } else {
-        globalMap[name] = {name, type: ['function'], ref: ['function', node]};
+        globalMap[name] = {name, value: ['function', node]};
       }
     }
   });
 
   // Initialize the memory, control, and scope data structures.
-  const memory = {start: 0, limit: 0x10000, fill: 0};
+  const limit = 0x10000;
+  const memory = allocate(limit);
   const control = {
     node:
       ['CallExpr', {}, [
@@ -32,7 +37,7 @@ export const start = function (context) {
           ['Name', {identifier: 'main'}, []]]]]],
     step: 0
   };
-  const scope = {key: 0, limit: memory.limit};
+  const scope = {key: 0, limit: limit};
   const state = {globalMap, memory, control, scope};
 
   return state;
@@ -53,14 +58,14 @@ export const step = function (state, options) {
   if ('effects' in step) {
     // Perform the side-effects.
     step.effects.forEach(function (effect) {
+      console.log('effect', effect);
       if (effect[0] === 'store') {
         const ref = effect[1];
-        const value = effect[2];
-        if (ref[0] === 'pointer') {
-          const address = ref[1];
-          newState.memory = {parent: newState.memory, address, value};
+        if (ref instanceof PointerValue) {
+          const value = effect[2];
+          newState.memory = writeValue(newState.memory, ref, value);
         } else {
-          console.log('cannot write through reference', ref, value);
+          console.log('non-pointer reference', ref);
         }
       } else if (effect[0] === 'enter') {
         const parentScope = newState.scope;
@@ -86,8 +91,8 @@ export const step = function (state, options) {
       } else if (effect[0] === 'vardecl') {
         const parentScope = newState.scope;
         const decl = effect[1];
-        const address = parentScope.limit - sizeOfType(decl.type);
-        const ref = ['pointer', address];
+        const address = parentScope.limit - decl.type.size;
+        const ref = new PointerValue(decl.type, address);
         newState.scope = {
           parent: parentScope,
           key: parentScope.key + 1,
@@ -96,13 +101,13 @@ export const step = function (state, options) {
           decl: {...decl, ref}
         };
         if (effect[2] !== null) {
-          newState.memory = {parent: newState.memory, address, value: effect[2]};
+          newState.memory = writeValue(newState.memory, ref, effect[2]);
         }
       } else if (effect[0] === 'param') {
         const parentScope = newState.scope;
         const decl = effect[1];
-        const address = parentScope.limit - sizeOfType(decl.type);  // XXX array
-        const ref = ['pointer', address];
+        const address = parentScope.limit - decl.type.size;
+        const ref = new PointerValue(decl.type, address);
         newState.scope = {
           parent: parentScope,
           key: parentScope.key + 1,
@@ -111,7 +116,7 @@ export const step = function (state, options) {
           decl: {...decl, ref}
         };
         if (effect[2] !== null) {
-          newState.memory = {parent: newState.memory, address, value: effect[2]};
+          newState.memory = writeValue(newState.memory, ref, effect[2]);
         }
       } else {
         newState = options.onEffect(newState, effect);

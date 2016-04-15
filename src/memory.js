@@ -1,26 +1,33 @@
 
-export const deref = function (state, ref, ty) {
+import Immutable from 'immutable';
+import {packValue, unpackValue} from './value';
 
-  if (ref === undefined) {
-    alert('dereferenced undefined pointer');
-    return undefined;
+const littleEndian = false;
+
+export const allocate = function (size) {
+  return Immutable.List(Array(size).fill(0));
+};
+
+export const writeValue = function (memory, ref, value) {
+  if (value === undefined)
+    return memory;  // XXX
+  // XXX assert(typeEquals(ref.type, value.type)
+  const address = ref.address;
+  const nbytes = value.type.size;
+  const view = new DataView(new ArrayBuffer(nbytes));
+  packValue(view, 0, value, littleEndian);
+  for (let offset = 0; offset < nbytes; offset += 1) {
+    memory = memory.set(address + offset, view.getUint8(offset));
   }
+  return memory;
+};
 
-  // A reference to a builtin or a user function evaluates to itself.
-  if (ref[0] === 'builtin' || ref[0] === 'function')
-    return ref;
-
-  if (ref[0] === 'pointer') {
-    const address = ref[1];
-    // XXX read at type ty
-    let memory = state.memory;
-    while (memory) {
-      if (memory.address === address) {
-        return memory.value;
-      }
-      memory = memory.parent;
-    }
+export const readValue = function (memory, ref) {
+  const {type, address} = ref;
+  const nbytes = type.size;
+  const view = new DataView(new ArrayBuffer(nbytes));
+  for (let offset = 0; offset < nbytes; offset += 1) {
+    view.setUint8(offset, memory.get(address + offset));
   }
-
-  return 0;
+  return unpackValue(view, 0, type, littleEndian);
 };

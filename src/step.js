@@ -13,13 +13,13 @@ with the seq property set to true.  In C, sequence points occur:
 
 */
 
+import {scalarTypes, pointerType, functionType, constantArrayType} from './type';
 import {
-  integerValue, floatingValue, unboxAsInteger,
+  IntegralValue,
   evalUnaryOperation, evalBinaryOperation, evalCast} from './value';
-import {sizeOfType} from './type';
-import {deref} from './memory';
+import {writeValue, readValue} from './memory';
 
-const one = integerValue(1);
+const one = new IntegralValue(scalarTypes['int'], 1);
 
 const findDeclaration = function (state, name) {
   // Search in the local scope.
@@ -51,11 +51,10 @@ const sizeOfExpr = function (state, node) {
       {
         const name = node[2][0];
         const decl = findDeclaration(state, name[1].identifier);
-        return decl.size;
+        return decl.type.size;
       }
     default:
-      alert ('sizeof expr ' + node[0]);
-      return 0;
+      throw `sizeOfExpr ${JSON.stringify(node)}`
   }
 };
 
@@ -136,7 +135,7 @@ const stepForStmt = function (state, control) {
   }
   if (step === 3) {
     // result ? (enter body, continue w/ step 2) : leave
-    if (0 !== unboxAsInteger(state.result)) {
+    if (state.result.toBool()) {
       return {control: enterStmt(node[2][3], {...control, step: 2, break: 4})};
     }
   }
@@ -151,7 +150,7 @@ const stepWhileStmt = function (state, control) {
   }
   if (step === 1) {
     // result ? (enter body, continue w/ step 0) : leave
-    if (0 !== unboxAsInteger(state.result)) {
+    if (state.result.toBool()) {
       return {control: enterStmt(node[2][1], {...control, step: 0, break: 2})};
     }
   }
@@ -170,7 +169,7 @@ const stepDoStmt = function (state, control) {
   }
   if (step === 2) {
     // result ? (enter body, continue w/ step 1) : leave
-    if (0 !== unboxAsInteger(state.result)) {
+    if (state.result.toBool()) {
       const cont = {...control, step: 1, break: 3};
       return {control: enterStmt(node[2][0], cont)};
     }
@@ -201,7 +200,7 @@ const stepIfStmt = function (state, control) {
     // No 'statement' boundary around the condition.
     return {control: enterExpr(node[2][0], {...control, step: 1})};
   case 1:
-    if (0 !== unboxAsInteger(state.result)) {
+    if (state.result.toBool()) {
       return {control: enterStmt(node[2][1], {...control, step: 2})};
     } else {
       if (node[2].length === 3)
@@ -259,8 +258,7 @@ const stepCallExpr = function (state, control) {
         effects: [['enter', 'function', funcNode]]
       };
     }
-    console.log('call error', funcVal);
-    throw 'call error';
+    return {control, error: `call error ${funcVal}`};
   }
   const funcVal = values[0];
   if (step === 'F') {
@@ -269,7 +267,7 @@ const stepCallExpr = function (state, control) {
     const funcNode = funcVal[1];
     const funcType = state.result;
     const effects = [];
-    const params = funcType[2];
+    const params = funcType.params;
     for (let i = 0; i < params.length; i++) {
       effects.push(['param', params[i], values[i + 1]]);
     }
@@ -289,7 +287,7 @@ const stepCallExpr = function (state, control) {
   }
 };
 
-const stepImplicitCastExpr = function (state, control) {
+const stepCastExpr = function (state, control) {
   const {step, node} = control;
   if (step === 0) {
     // An implicit cast is transparent w.r.t. the value/lvalue mode.
@@ -313,10 +311,15 @@ const stepDeclRefExpr = function (state, control) {
   const name = control.node[2][0];
   const decl = findDeclaration(state, name[1].identifier);
   let result;
-  if (control.mode === 'lvalue' || /^(array|function)$/.test(decl.type[0])) {
-    result = decl.ref
+  if (control.mode === 'lvalue') {
+    // XXX check that decl.ref exists
+    result = decl.ref;
   } else {
-    result = deref(state, decl.ref, decl.type);
+    if (decl.ref) {
+      result = readValue(state.memory, decl.ref);
+    } else {
+      result = decl.value; // XXX cheating
+    }
   }
   return {control: control.cont, result};
 };
@@ -343,7 +346,7 @@ const stepAssignmentUnaryOperator = function (state, control) {
     };
   } else {
     const lvalue = state.result;
-    const oldValue = deref(state, lvalue);
+    const oldValue = readValue(state.memory, lvalue);
     const opcode = control.node[1].opcode;
     const binOp = /Inc$/.test(opcode) ? 'Add' : 'Sub';
     const newValue = evalBinaryOperation(binOp, oldValue, one);
@@ -379,7 +382,7 @@ const stepDeref = function (state, control) {
     // Pass the result.
     const lvalue = state.result;
     // As an lvalue (*a) reduces to a.
-    const result = (control.mode === 'lvalue') ? lvalue : deref(state, lvalue);
+    const result = (control.mode === 'lvalue') ? lvalue : readValue(state.memory, lvalue);
     return {control: control.cont, result};
   }
 };
@@ -388,7 +391,8 @@ const stepUnaryExprOrTypeTraitExpr = function (state, control) {
   // In C, this node kind is always sizeof.
   // TODO: include the type of the expression in the AST, so we can
   //       simply call sizeOfType.
-  const result = integerValue(sizeOfExpr(state, control.node[2][0]));
+  const size = sizeOfExpr(state, control.node[2][0]);
+  const result = new IntegralValue(scalarTypes['int'], size);
   return {control: control.cont, result};
 };
 
@@ -403,9 +407,9 @@ const stepBinaryOperator = function (state, control) {
     const lhs = state.result;
     const opcode = control.node[1].opcode;
     // Short-circuit evaluation for logical operators.
-    if ((opcode === 'LAnd' && 0 === unboxAsInteger(lhs)) ||
-        (opcode === 'LOr' && 0 !== unboxAsInteger(lhs)))
+    if ((opcode === 'LAnd' && !lhs.toBool()) || (opcode === 'LOr' && lhs.toBool())) {
       return {control: control.cont, result: lhs};
+    }
     return {
       control: enterExpr(control.node[2][1], {...control, step: 2, lhs})
     };
@@ -451,7 +455,7 @@ const stepAssignmentBinaryOperator = function (state, control) {
   } else if (control.step === 1) {
     // After LHS, before RHS.
     const lvalue = state.result;
-    const lhs = deref(state, lvalue);
+    const lhs = readValue(state.memory, lvalue);
     return {
       control: enterExpr(control.node[2][1], {...control, step: 2, lvalue, lhs})
     };
@@ -464,11 +468,6 @@ const stepAssignmentBinaryOperator = function (state, control) {
     const effects = [['store', lvalue, result]];
     return {control: control.cont, result, effects};
   }
-};
-
-const stepCStyleCastExpr = function (state, control) {
-  // TODO: implement stepCStyleCastExpr; children are [expr, type].
-  return {control, error: 'cast is not implemented yet'};
 };
 
 const stepArraySubscriptExpr = function (state, control) {
@@ -490,33 +489,35 @@ const stepVarDecl = function (state, control) {
   }
   const {name} = control.node[1];
   const type = step === 1 ? state.result : control.type;
-  const size = sizeOfType(type);
   const init = step === 2 ? state.result : null;
-  const effects = [['vardecl', {name, type, size}, init]];
+  const effects = [['vardecl', {name, type}, init]];
   return {control: control.cont, result: null, effects};
 };
 
 const stepIntegerLiteral = function (state, control) {
-  const number = parseInt(control.node[1].value);  // XXX somewhat incorrect?
+  const value = control.node[1].value;
+  // XXX use different type if value ends with l, ll, ul, ull
   return {
     control: control.cont,
-    result: integerValue(number)
+    result: new IntegralValue(scalarTypes['int'], parseInt(value))
   };
 };
 
 const stepCharacterLiteral = function (state, control) {
-  const char = control.node[1].value;
+  const value = control.node[1].value;
+  // XXX use 'unsigned char' if value ends with 'u'
   return {
     control: control.cont,
-    result: integerValue(char)
+    result: new IntegralValue(scalarTypes['char'], parseInt(value))
   };
 };
 
 const stepFloatingLiteral = function (state, control) {
-  const number = control.node[1].value;
+  const value = control.node[1].value;
+  // XXX use 'double' if value ends with 'l'
   return {
     control: control.cont,
-    result: floatingValue(number)
+    result: new FloatingValue(scalarTypes['float'], parseFloat(value))
   };
 };
 
@@ -524,13 +525,13 @@ const stepStringLiteral = function (state, control) {
   const value = control.node[1].value;
   return {
     control: control.cont,
-    result: ['string', value]  // TODO: convert to heap address
+    result: ['string', value]  // XXX: convert to heap address
   };
 };
 
 const stepBuiltinType = function (state, control) {
   const {name} = control.node[1];
-  const result = ['builtin', name];
+  const result = scalarTypes[name];
   return {control: control.cont, result};
 };
 
@@ -539,7 +540,7 @@ const stepPointerType = function (state, control) {
   if (step === 0) {
     return {control: enter(node[2][0], {...control, step: 1})};
   }
-  const result = ['pointer', state.result];
+  const result = pointerType(state.result);
   return {control: control.cont, result};
 };
 
@@ -554,7 +555,7 @@ const stepConstantArrayType = function (state, control) {
   }
   const {elemType} = control;
   const elemCount = state.result;
-  const result = ['array', elemType, elemCount];
+  const result = constantArrayType(elemType, elemCount);
   return {control: control.cont, result};
 };
 
@@ -573,13 +574,14 @@ const stepFunctionProtoType = function (state, control) {
   }
   return {
     control: control.cont,
-    result: ['function', cont.result, cont.params]
+    result: functionType(cont.result, cont.params)
   };
 };
 
 const stepParmVarDecl = function (state, control) {
   const {node, step} = control;
   if (step === 0) {
+    // Evaluate the type.
     return {
       control: enter(node[2][0], {...control, step: step + 1})
     };
@@ -616,7 +618,8 @@ export const getStep = function (state, control) {
   case "CallExpr":
     return stepCallExpr(state, control);
   case "ImplicitCastExpr":
-    return stepImplicitCastExpr(state, control);
+  case "CStyleCastExpr":
+    return stepCastExpr(state, control);
   case "DeclRefExpr":
     return stepDeclRefExpr(state, control);
   case "IntegerLiteral":
@@ -640,21 +643,20 @@ export const getStep = function (state, control) {
       default:
         return {
           control,
-          error: 'cannot step through UnaryOperator ' + control.node[1].opcode
+          error: `cannot step through UnaryOperator ${control.node[1].opcode}`
         };
     }
     break;
   case 'UnaryExprOrTypeTraitExpr':
     return stepUnaryExprOrTypeTraitExpr(state, control);
   case 'BinaryOperator':
-    if (control.node[1].opcode === 'Assign')
+    if (control.node[1].opcode === 'Assign') {
       return stepAssignmentOperator(state, control);
-    else
+    } else {
       return stepBinaryOperator(state, control);
+    }
   case 'CompoundAssignOperator':
     return stepAssignmentBinaryOperator(state, control);
-  case 'CStyleCastExpr':
-    return stepCStyleCastExpr(state, control);
   case 'ArraySubscriptExpr':
     return stepArraySubscriptExpr(state, control);
   case 'BuiltinType':
@@ -671,6 +673,6 @@ export const getStep = function (state, control) {
   }
   return {
     control,
-    error: 'cannot step through ' + control.node[0]
+    error: `cannot step through ${control.node[0]}`
   };
 };

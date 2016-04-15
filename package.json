@@ -1,6 +1,6 @@
 {
   "name": "persistent-c",
-  "version": "2.1.0",
+  "version": "3.0.0",
   "main": "lib/index.js",
   "description": "A C language step-by-step evaluator written in JavaScript and using persistent (immutable) data structures.",
   "scripts": {
@@ -31,5 +31,8 @@
     "chokidar": "^1.4.3",
     "tap-spec": "^4.1.1",
     "tape": "^4.4.0"
+  },
+  "dependencies": {
+    "immutable": "^3.7.6"
   }
 }

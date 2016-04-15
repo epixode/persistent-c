@@ -1,118 +1,250 @@
 
-export const integerValue = function (number) {
-  if (typeof number === 'string') {
-    number = parseInt(number);
-  }
-  return ['integer', number | 0];
+import {scalarTypes, lubType} from './type';
+
+export function IntegralValue (type, number) {
+  this.type = type;
+  this.number = number | 0;
+};
+IntegralValue.prototype.toString = function () {
+  return this.number.toString();
+};
+IntegralValue.prototype.toInteger = function () {
+  return this.number;
+};
+IntegralValue.prototype.toBool = function () {
+  return 0 !== this.number;
 };
 
-export const floatingValue = function (number) {
-  if (typeof number === 'string') {
-    number = parseFloat(number);
+export function FloatingValue (type, number) {
+  this.type = type;
+  this.number = type.size === 4 ? Math.fround(address) : address;
+};
+FloatingValue.prototype.toString = function () {
+  return this.number.toString();
+};
+FloatingValue.prototype.toInteger = function () {
+  return this.number | 0;
+};
+FloatingValue.prototype.toBool = function () {
+  return 0 !== this.number;
+};
+
+export function PointerValue (type, address) {
+  this.type = type;
+  this.address = address | 0;
+};
+PointerValue.prototype.toString = function () {
+  return `0x${this.address.toString(16)}`;
+};
+PointerValue.prototype.toInteger = function () {
+  return this.address;
+};
+PointerValue.prototype.toBool = function () {
+  return 0 !== this.address;
+};
+
+export function ConstantArrayValue (type, elements) {
+  this.type = type;
+  this.elements = elements;
+};
+ConstantArrayValue.prototype.toString = function () {
+  return `constant array`;
+};
+
+export const packValue = function (view, offset, value, littleEndian) {
+  switch (value.type.kind) {
+    case 'scalar':
+      switch (value.type.repr) {
+        case 'char':
+          view.setInt8(offset, value.number);
+          break;
+        case 'unsigned char':
+          view.setUint8(offset, value.number);
+          break;
+        case 'short':
+          view.setInt16(offset, value.number, littleEndian);
+          break;
+        case 'unsigned short':
+          view.setUint16(offset, value.number, littleEndian);
+          break;
+        case 'int':
+        case 'long':
+          view.setInt32(offset, value.number, littleEndian);
+          break;
+        case 'unsigned int':
+        case 'unsigned long':
+          view.setUint32(offset, value.number, littleEndian);
+          break;
+        case 'float':
+          view.setFloat32(offset, value.number, littleEndian);
+          break;
+        case 'double':
+          view.setFloat64(offset, value.number, littleEndian);
+          break;
+        default:
+          throw `pack scalar ${value.type.repr}`;
+      }
+      break;
+    case 'array':
+      {
+        const elemSize = value.type.elem.size;
+        value.elements.forEach(function (elem, index) {
+          packValue(view, offset + index * elemSize, elem, littleEndian);
+        });
+        break;
+      }
+    case 'pointer':
+      view.setUint32(offset, value.address, littleEndian);
+      break;
+    default:
+      throw `not implemented: pack ${value.type.kind}`;
   }
-  return ['floating', number];
+};
+
+export const unpackValue = function (view, offset, type, littleEndian) {
+  switch (type.kind) {
+    case 'scalar':
+      switch (type.repr) {
+        case 'char':
+          return new IntegralValue(type, view.getInt8(offset));
+        case 'unsigned char':
+          return new IntegralValue(type, view.getUint8(offset));
+        case 'short':
+          return new IntegralValue(type, view.getInt16(offset, littleEndian));
+        case 'unsigned short':
+          return new IntegralValue(type, view.getUint16(offset, littleEndian));
+        case 'int':
+        case 'long':
+          return new IntegralValue(type, view.getInt32(offset, littleEndian));
+        case 'unsigned int':
+        case 'unsigned long':
+          return new IntegralValue(type, view.getUint32(offset, littleEndian));
+        case 'float':
+          return new FloatingValue(type, view.getFloat32(offset, littleEndian));
+        case 'double':
+          return new FloatingValue(type, view.getFloat64(offset, littleEndian));
+        default:
+          throw `unpack scalar ${value.type.repr}`;
+      }
+    case 'array':
+      {
+        const elemType = type.elem;
+        const elemSize = elemType.size;
+        const elements = [];
+        for (var i = 0; i < type.count; i++) {
+          elements.push(unpackValue(view, offset + index * elemSize, elemType, littleEndian));
+        }
+        return new ConstantArrayValue(type, elements);
+      }
+    case 'pointer':
+      return new PointerValue(type, view.getUint32(offset, littleEndian));
+    default:
+      throw `not implemented: unpack ${value.type.kind}`;
+  }
+};
+
+const isRelational = function (op) {
+  return /^(EQ|NE|LT|LE|GT|GE)$/.test(op);
+};
+
+const evalRelationalOperation = function (op, v1, v2) {
+  switch (op) {
+    case 'EQ':  return v1 === v2;
+    case 'NE':  return v1 !== v2;
+    case 'LT':  return v1 < v2;
+    case 'LE':  return v1 <= v2;
+    case 'GT':  return v1 > v2;
+    case 'GE':  return v1 >= v2;
+  }
 };
 
 const evalIntegerBinaryOperation = function (op, v1, v2) {
-  let r;
   switch (op) {
-    case 'Add': case 'AddAssign': r = v1 + v2;  break;
-    case 'Sub': case 'SubAssign': r = v1 - v2;  break;
-    case 'Mul': case 'MulAssign': r = v1 * v2;  break;
-    case 'Div': case 'DivAssign': r = v1 / v2;  break;
+    case 'Add': case 'AddAssign': return v1 + v2;
+    case 'Sub': case 'SubAssign': return v1 - v2;
+    case 'Mul': case 'MulAssign': return v1 * v2;
+    case 'Div': case 'DivAssign': return v1 / v2;
     // TODO: check Rem results on negative values
-    case 'Rem': case 'RemAssign': r = v1 % v2;  break;
-    case 'And': case 'AndAssign': r = v1 & v2;  break;
-    case 'Or':  case 'OrAssign':  r = v1 | v2;  break;
-    case 'Xor': case 'XorAssign': r = v1 ^ v2;  break;
-    case 'Shl': case 'ShlAssign': r = v1 << v2; break;
-    case 'Shr': case 'ShrAssign': r = v1 >> v2; break;
-    case 'EQ':  r = v1 === v2; break;
-    case 'NE':  r = v1 !== v2; break;
-    case 'LT':  r = v1 < v2;   break;
-    case 'LE':  r = v1 <= v2;  break;
-    case 'GT':  r = v1 > v2;   break;
-    case 'GE':  r = v1 >= v2;  break;
+    case 'Rem': case 'RemAssign': return v1 % v2;
+    case 'And': case 'AndAssign': return v1 & v2;
+    case 'Or':  case 'OrAssign':  return v1 | v2;
+    case 'Xor': case 'XorAssign': return v1 ^ v2;
+    case 'Shl': case 'ShlAssign': return v1 << v2;
+    case 'Shr': case 'ShrAssign': return v1 >> v2;
   }
-  return integerValue(r);
 };
 
 const evalFloatingBinaryOperation = function (op, v1, v2) {
-  let r;
   switch (op) {
-    case 'Add': case 'AddAssign': r = v1 + v2;  break;
-    case 'Sub': case 'SubAssign': r = v1 - v2;  break;
-    case 'Mul': case 'MulAssign': r = v1 * v2;  break;
-    case 'Div': case 'DivAssign': r = v1 / v2;  break;
-    case 'EQ':  return integerValue(v1 === v2);
-    case 'NE':  return integerValue(v1 !== v2);
-    case 'LT':  return integerValue(v1  <  v2);
-    case 'LE':  return integerValue(v1 <=  v2);
-    case 'GT':  return integerValue(v1  >  v2);
-    case 'GE':  return integerValue(v1 >=  v2);
+    case 'Add': case 'AddAssign': return v1 + v2;
+    case 'Sub': case 'SubAssign': return v1 - v2;
+    case 'Mul': case 'MulAssign': return v1 * v2;
+    case 'Div': case 'DivAssign': return v1 / v2;
   }
-  return floatingValue(r);
 };
 
-export const evalBinaryOperation = function (op, lhs, rhs) {
-  if (lhs[0] === 'integer' && rhs[0] === 'integer') {
-    return evalIntegerBinaryOperation(op, lhs[1], rhs[1]);
+export const evalBinaryOperation = function (opcode, lhs, rhs) {
+  if (isRelational(opcode)) {
+    const result = evalRelationalOperation(opcode, lhs.number, rhs.number);
+    return new IntegralValue(scalarTypes['int'], result ? 1 : 0);
   }
-  if (lhs[0] === 'floating' && rhs[0] === 'floating') {
-    return evalFloatingBinaryOperation(op, lhs[1], rhs[1]);
+  if (lhs instanceof IntegralValue && rhs instanceof IntegralValue) {
+    const result = evalIntegerBinaryOperation(opcode, lhs.number, rhs.number);
+    return new IntegralValue(lubType(lhs.type, rhs.type), result);
   }
-  return ['expr', op, lhs, rhs];
+  if (lhs instanceof FloatingValue && rhs instanceof FloatingValue) {
+    const result = evalFloatingBinaryOperation(opcode, lhs.number, rhs.number)
+    return new FloatingValue(lubType(lhs.type, rhs.type), result);
+  }
+  throw `not implemented: ${lhs} ${opcode} ${rhs}`;
 };
 
 export const evalUnaryOperation = function (opcode, operand) {
-  if (operand[0] === 'integer') {
+  if (operand instanceof IntegralValue) {
     switch (opcode) {
       case 'Plus': return operand;
-      case 'Minus': return integerValue(-operand[1]);
-      case 'LNot': return integerValue(operand[1] === 0);
-      case 'Not': return integerValue(~operand[1]);
+      case 'Minus': return new IntegralValue(operand.type, -operand.number);
+      case 'LNot': return new IntegralValue(scalarTypes['int'], operand.number ? 1 : 0);
+      case 'Not': return new IntegralValue(operand.type, ~operand.number);
     }
   }
-  if (operand[0] === 'floating') {
+  if (operand instanceof FloatingValue) {
     switch (opcode) {
       case 'Plus': return operand;
-      case 'Minus': return floatingValue(-operand[1]);
+      case 'Minus': return new FloatingValue(operand.type, -operand.number);
     }
   }
-  return ['expr', opcode, operand];
+  throw `not implemented: ${opcode} ${operand}`;
 };
 
-export const unboxAsInteger = function (value) {
-  if (value[0] === 'integer')
-    return value[1];
-  if (value[0] === 'floating')
-    return value[1] | 0;
-  // TODO: handle pointers
-  console.log('unboxAsInteger not implemented for', value);
-  throw 'unboxAsInteger';
-};
-
-export const evalCast = function (ty, value) {
-  if (ty[0] === 'builtin') {
-    if (ty[1] === 'char' || ty[1] === 'unsigned char')
-      return integerValue(unboxAsInteger(value) & 0xff);
-    if (ty[1] === 'short' || ty[1] === 'unsigned short')
-      return integerValue(unboxAsInteger(value) & 0xffff);
-    if (ty[1] === 'int' || ty[1] === 'unsigned int')
-      return integerValue(unboxAsInteger(value) & 0xffffffff);
-    if (ty[1] === 'long' || ty[1] === 'unsigned long')
-      return integerValue(unboxAsInteger(value) & 0xffffffff);
-    if (ty[1] === 'float' || ty[1] === 'double') {
-      if (value[0] === 'integer' || value[0] === 'floating') {
-        return floatingValue(value[1]);
+export const evalCast = function (type, operand) {
+  if (type.kind === 'scalar') {
+    if (/^(unsigned )?char$/.test(type.repr)) {
+      return new IntegralValue(type, operand.toInteger() & 0xff);
+    }
+    if (/^(unsigned )?short$/.test(type.repr)) {
+      return new IntegralValue(type, operand.toInteger() & 0xffff);
+    }
+    if (/^(unsigned )?(int|long)$/.test(type.repr)) {
+      return new IntegralValue(type, operand.toInteger() & 0xffffffff);
+    }
+    if (type.repr === 'float') {
+      if (operand instanceof IntegralValue || operand instanceof IntegralValue) {
+        return new FloatingValue(type, operand.number)
+      }
+    }
+    if (type.repr === 'double') {
+      if (operand instanceof FloatingValue || operand instanceof IntegralValue) {
+        return new FloatingValue(type, operand.number);
       }
     }
   }
-  if (ty[0] === 'pointer') {
-    // XXX string is temporary, it should just be a pointer
-    if (/^(pointer|function|builtin|string)$/.test(value[0]))
-      return value;
+  if (type.kind === 'pointer') {
+    if (operand instanceof PointerValue) {
+      return new PointerValue(type, operand.address);
+    }
+    console.log('warning: ignored cast', operand);
+    return operand;
   }
-  console.log("evalCast not implemented for", ty, value);
-  throw 'evalCast';
+  throw `not implemented: (${type})${operand}`;
 };
