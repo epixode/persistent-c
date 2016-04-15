@@ -15,6 +15,10 @@ export const sizeOfType = function (ty) {
           return 4;
         case 'long long': case 'unsigned long long':
           return 8;
+        case 'float':
+          return 4;
+        case 'double':
+          return 8;
         default:
           throw ('sizeof builtin type ' + ty[1])
       }
