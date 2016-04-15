@@ -102,6 +102,11 @@ export const evalCast = function (ty, value) {
       return integerValue(unboxAsInteger(value) & 0xffffffff);
     if (ty[1] === 'long' || ty[1] === 'unsigned long')
       return integerValue(unboxAsInteger(value) & 0xffffffff);
+    if (ty[1] === 'float' || ty[1] === 'double') {
+      if (value[0] === 'integer' || value[0] === 'floating') {
+        return floatingValue(value[1]);
+      }
+    }
   }
   if (ty[0] === 'pointer') {
     // XXX string is temporary, it should just be a pointer
