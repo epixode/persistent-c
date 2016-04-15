@@ -1,9 +1,15 @@
 
 export const integerValue = function (number) {
+  if (typeof number === 'string') {
+    number = parseInt(number);
+  }
   return ['integer', number | 0];
 };
 
 export const floatingValue = function (number) {
+  if (typeof number === 'string') {
+    number = parseFloat(number);
+  }
   return ['floating', number];
 };
 
