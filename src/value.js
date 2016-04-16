@@ -246,6 +246,10 @@ export const evalCast = function (type, operand) {
     if (operand instanceof IntegralValue) {
       return new PointerValue(type, operand.toInteger())
     }
+    if (/^(builtin|function|string)$/.test(operand[0])) {
+      // XXX temporary cheat for non-addressable values.
+      return operand;
+    }
   }
   throw `not implemented: (${type})${operand}`;
 };
