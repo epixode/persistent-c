@@ -15,7 +15,7 @@ with the seq property set to true.  In C, sequence points occur:
 
 import {scalarTypes, pointerType, functionType, constantArrayType} from './type';
 import {
-  IntegralValue,
+  IntegralValue, PointerValue,
   evalUnaryOperation, evalBinaryOperation, evalCast} from './value';
 import {writeValue, readValue} from './memory';
 
@@ -27,7 +27,8 @@ const findDeclaration = function (state, name) {
   while (scope) {
     const {decl} = scope;
     if (decl && decl.name === name) {
-      return decl;
+      // Return the PointerValue to the variable's memory location.
+      return scope.ref;
     }
     if (scope.kind === 'function') {
       // Prevent searching outside of the function's scope.
@@ -50,8 +51,12 @@ const sizeOfExpr = function (state, node) {
     case 'DeclRefExpr':
       {
         const name = node[2][0];
-        const decl = findDeclaration(state, name[1].identifier);
-        return decl.type.size;
+        const ref = findDeclaration(state, name[1].identifier);
+        if ('value' in ref) {
+          // XXX non-addressable values have a 0 size.
+          return 0;
+        }
+        return ref.type.pointee.size;
       }
     default:
       throw `sizeOfExpr ${JSON.stringify(node)}`
@@ -309,17 +314,25 @@ const stepCastExpr = function (state, control) {
 
 const stepDeclRefExpr = function (state, control) {
   const name = control.node[2][0];
-  const decl = findDeclaration(state, name[1].identifier);
+  const ref = findDeclaration(state, name[1].identifier);
   let result;
-  if (control.mode === 'lvalue') {
-    // XXX check that decl.ref exists
-    result = decl.ref;
-  } else {
-    if (decl.ref) {
-      result = readValue(state.memory, decl.ref);
+  if (ref instanceof PointerValue) {
+    if (control.mode === 'lvalue') {
+      result = ref;
     } else {
-      result = decl.value; // XXX cheating
+      result = readValue(state.memory, ref);
     }
+  } else if ('value' in ref) {
+    // If findDeclaration returns an object which does not have an address,
+    // we cheat and pretend that we read its value from memory.
+    // We cannot take the address of such a declaration.
+    if (control.mode === 'lvalue') {
+      throw `cannot take address of ${name[1].identifier}`;
+    } else {
+      result = ref.value;
+    }
+  } else {
+    throw `bad reference for ${name[1].identifier}: ${JSON.stringify(ref)}`;
   }
   return {control: control.cont, result};
 };

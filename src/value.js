@@ -243,8 +243,9 @@ export const evalCast = function (type, operand) {
     if (operand instanceof PointerValue) {
       return new PointerValue(type, operand.address);
     }
-    console.log('warning: ignored cast', operand);
-    return operand;
+    if (operand instanceof IntegralValue) {
+      return new PointerValue(type, operand.toInteger())
+    }
   }
   throw `not implemented: (${type})${operand}`;
 };

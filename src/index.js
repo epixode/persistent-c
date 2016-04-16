@@ -1,8 +1,9 @@
 
 // import {functionType, pointerType, scalarTypes} from './type';
 import {allocate, writeValue} from './memory';
-import {PointerValue} from './value';
 import {getStep} from './step';
+import {pointerType} from './type';
+import {PointerValue} from './value';
 
 export {readValue} from './memory';
 
@@ -60,13 +61,10 @@ export const step = function (state, options) {
     step.effects.forEach(function (effect) {
       console.log('effect', effect);
       if (effect[0] === 'store') {
+        // ['store', {type, address}, value]
         const ref = effect[1];
-        if (ref instanceof PointerValue) {
-          const value = effect[2];
-          newState.memory = writeValue(newState.memory, ref, value);
-        } else {
-          console.log('non-pointer reference', ref);
-        }
+        const value = effect[2];
+        newState.memory = writeValue(newState.memory, ref, value);
       } else if (effect[0] === 'enter') {
         const parentScope = newState.scope;
         const kind = effect[1];
@@ -92,13 +90,14 @@ export const step = function (state, options) {
         const parentScope = newState.scope;
         const decl = effect[1];
         const address = parentScope.limit - decl.type.size;
-        const ref = new PointerValue(decl.type, address);
+        const ref = new PointerValue(pointerType(decl.type), address);
         newState.scope = {
           parent: parentScope,
           key: parentScope.key + 1,
           limit: address,
           kind: 'vardecl',
-          decl: {...decl, ref}
+          decl: decl,
+          ref: ref
         };
         if (effect[2] !== null) {
           newState.memory = writeValue(newState.memory, ref, effect[2]);
@@ -107,13 +106,14 @@ export const step = function (state, options) {
         const parentScope = newState.scope;
         const decl = effect[1];
         const address = parentScope.limit - decl.type.size;
-        const ref = new PointerValue(decl.type, address);
+        const ref = new PointerValue(pointerType(decl.type), address);
         newState.scope = {
           parent: parentScope,
           key: parentScope.key + 1,
           limit: address,
           kind: 'param',
-          decl: {...decl, ref}
+          decl: decl,
+          ref: ref
         };
         if (effect[2] !== null) {
           newState.memory = writeValue(newState.memory, ref, effect[2]);

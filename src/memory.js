@@ -11,7 +11,8 @@ export const allocate = function (size) {
 export const writeValue = function (memory, ref, value) {
   if (value === undefined)
     return memory;  // XXX
-  // XXX assert(typeEquals(ref.type, value.type)
+  // XXX assert(ref instanceof PointerValue)
+  // XXX assert(typeEquals(ref.type.pointee, value.type))
   const address = ref.address;
   const nbytes = value.type.size;
   const view = new DataView(new ArrayBuffer(nbytes));
@@ -23,11 +24,12 @@ export const writeValue = function (memory, ref, value) {
 };
 
 export const readValue = function (memory, ref) {
+  // XXX assert(ref instanceof PointerValue)
   const {type, address} = ref;
-  const nbytes = type.size;
+  const nbytes = type.pointee.size;
   const view = new DataView(new ArrayBuffer(nbytes));
   for (let offset = 0; offset < nbytes; offset += 1) {
     view.setUint8(offset, memory.get(address + offset));
   }
-  return unpackValue(view, 0, type, littleEndian);
+  return unpackValue(view, 0, type.pointee, littleEndian);
 };
