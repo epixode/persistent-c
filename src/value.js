@@ -124,7 +124,7 @@ export const unpackValue = function (view, offset, type, littleEndian) {
         case 'double':
           return new FloatingValue(type, view.getFloat64(offset, littleEndian));
         default:
-          throw `unpack scalar ${value.type.repr}`;
+          throw `unpack scalar ${type.repr}`;
       }
     case 'array':
       {
@@ -139,7 +139,7 @@ export const unpackValue = function (view, offset, type, littleEndian) {
     case 'pointer':
       return new PointerValue(type, view.getUint32(offset, littleEndian));
     default:
-      throw `not implemented: unpack ${value.type.kind}`;
+      throw `not implemented: unpack ${type.kind}`;
   }
 };
 
