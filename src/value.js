@@ -253,3 +253,8 @@ export const evalCast = function (type, operand) {
   }
   throw `not implemented: (${type})${operand}`;
 };
+
+export const evalPointerAdd = function (pointer, value) {
+  const offset = value.toInteger() * pointer.type.pointee.size;
+  return new PointerValue(pointer.type, pointer.address + offset);
+};

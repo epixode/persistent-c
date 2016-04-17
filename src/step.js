@@ -16,7 +16,7 @@ with the seq property set to true.  In C, sequence points occur:
 import {scalarTypes, pointerType, functionType, constantArrayType} from './type';
 import {
   IntegralValue, PointerValue,
-  evalUnaryOperation, evalBinaryOperation, evalCast} from './value';
+  evalUnaryOperation, evalBinaryOperation, evalCast, evalPointerAdd} from './value';
 import {writeValue, readValue} from './memory';
 
 const one = new IntegralValue(scalarTypes['int'], 1);
@@ -315,12 +315,21 @@ const stepCastExpr = function (state, control) {
 const stepDeclRefExpr = function (state, control) {
   const name = control.node[2][0];
   const ref = findDeclaration(state, name[1].identifier);
+  const effects = [];
   let result;
   if (ref instanceof PointerValue) {
     if (control.mode === 'lvalue') {
       result = ref;
     } else {
-      result = readValue(state.memory, ref);
+      // In C, a reference to a constant array declaration is implicitly
+      // interpreted as a pointer to the array.
+      //     int a[1];  assert(a == &a);
+      if (ref.type.pointee.kind === 'constant array') {
+        result = ref;
+      } else {
+        result = readValue(state.memory, ref);
+        effects.push(['load', ref]);
+      }
     }
   } else if ('value' in ref) {
     // If findDeclaration returns an object which does not have an address,
@@ -334,7 +343,7 @@ const stepDeclRefExpr = function (state, control) {
   } else {
     throw `bad reference for ${name[1].identifier}: ${JSON.stringify(ref)}`;
   }
-  return {control: control.cont, result};
+  return {control: control.cont, result, effects};
 };
 
 const stepUnaryOperator = function (state, control) {
@@ -366,7 +375,10 @@ const stepAssignmentUnaryOperator = function (state, control) {
     const result = /^Pre/.test(opcode) ? newValue : oldValue;
     return {
       control: control.cont,
-      effects: [['store', lvalue, newValue]],
+      effects: [
+        ['load', lvalue],
+        ['store', lvalue, newValue]
+      ],
       result
     };
   }
@@ -394,9 +406,13 @@ const stepDeref = function (state, control) {
   } else {
     // Pass the result.
     const lvalue = state.result;
-    // As an lvalue (*a) reduces to a.
-    const result = (control.mode === 'lvalue') ? lvalue : readValue(state.memory, lvalue);
-    return {control: control.cont, result};
+    if (control.mode === 'lvalue') {
+      // As an lvalue (*a) reduces to a.
+      return {control: control.cont, result: lvalue};
+    }
+    const effects = ['load', lvalue];
+    const result = readValue(state.memory, lvalue);
+    return {control: control.cont, result, effects};
   }
 };
 
@@ -470,7 +486,8 @@ const stepAssignmentBinaryOperator = function (state, control) {
     const lvalue = state.result;
     const lhs = readValue(state.memory, lvalue);
     return {
-      control: enterExpr(control.node[2][1], {...control, step: 2, lvalue, lhs})
+      control: enterExpr(control.node[2][1], {...control, step: 2, lvalue, lhs}),
+      effects: ['load', lvalue]
     };
   } else {
     // After RHS.
@@ -484,7 +501,32 @@ const stepAssignmentBinaryOperator = function (state, control) {
 };
 
 const stepArraySubscriptExpr = function (state, control) {
-  return {control, error: 'array subscript is not implemented yet'};
+  if (control.step === 0) {
+    // Before array expr.
+    return {
+      control: enterExpr(control.node[2][0], {...control, step: 1})
+    };
+  } else if (control.step === 1) {
+    // After array expr, before subscript expr.
+    const array = state.result;
+    return {
+      control: enterExpr(control.node[2][1], {...control, step: 2, array})
+    };
+  } else {
+    // After subscript expr.
+    const array = control.array;
+    const subscript = state.result;
+    const ref = evalPointerAdd(array, subscript);
+    const effects = [];
+    let result;
+    if (control.mode === 'lvalue') {
+      result = ref;
+    } else {
+      result = readValue(state.memory, ref);
+      effects.push(['load', ref]);
+    }
+    return {control: control.cont, result};
+  }
 };
 
 const stepVarDecl = function (state, control) {
