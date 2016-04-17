@@ -1,11 +1,15 @@
 
-// import {functionType, pointerType, scalarTypes} from './type';
+import Immutable from 'immutable';
+
 import {allocate, writeValue} from './memory';
-import {getStep} from './step';
 import {pointerType} from './type';
 import {PointerValue} from './value';
+import {getStep} from './step';
+import {applyEffect} from './effects';
 
 export {readValue} from './memory';
+export {getStep} from './step';
+export {defaultEffects} from './effects';
 
 export const start = function (context) {
   const {decls, builtins} = context;
@@ -31,6 +35,7 @@ export const start = function (context) {
   // Initialize the memory, control, and scope data structures.
   const limit = 0x10000;
   const memory = allocate(limit);
+  const writeLog = Immutable.List();
   const control = {
     node:
       ['CallExpr', {}, [
@@ -39,99 +44,51 @@ export const start = function (context) {
     step: 0
   };
   const scope = {key: 0, limit: limit};
-  const state = {globalMap, memory, control, scope};
+  const state = {globalMap, memory, writeLog, control, scope};
 
   return state;
 };
 
-export const step = function (state, options) {
-  // End of program?
-  if (!state.control)
-    return state;
-  let newState = {...state}, direction;
-  const step = getStep(newState, newState.control);
+export const applyStep = function (state, step, options) {
+  let newState = {...state};
+  // Update the control structure.
   newState.control = step.control;
-  if ('error' in step) {
-    newState.error = step.error;
-  } else {
-    newState.error = undefined;
-  }
-  if ('effects' in step) {
-    // Perform the side-effects.
-    step.effects.forEach(function (effect) {
-      console.log('effect', effect);
-      if (effect[0] === 'store') {
-        // ['store', {type, address}, value]
-        const ref = effect[1];
-        const value = effect[2];
-        newState.memory = writeValue(newState.memory, ref, value);
-      } else if (effect[0] === 'enter') {
-        const parentScope = newState.scope;
-        const kind = effect[1];
-        const block = effect[2];
-        newState.scope = {
-          parent: parentScope,
-          key: parentScope.key + 1,
-          limit: parentScope.limit,
-          kind,
-          block
-        }
-      } else if (effect[0] === 'leave') {
-        let scope = newState.scope;
-        while (scope.block !== effect[1]) {
-          scope = scope.parent;
-          if (!scope) {
-            console.log('stack underflow', newState.scope, effect);
-            throw 'stack underflow';
-          }
-        }
-        newState.scope = scope.parent;
-      } else if (effect[0] === 'vardecl') {
-        const parentScope = newState.scope;
-        const decl = effect[1];
-        const address = parentScope.limit - decl.type.size;
-        const ref = new PointerValue(pointerType(decl.type), address);
-        newState.scope = {
-          parent: parentScope,
-          key: parentScope.key + 1,
-          limit: address,
-          kind: 'vardecl',
-          decl: decl,
-          ref: ref
-        };
-        if (effect[2] !== null) {
-          newState.memory = writeValue(newState.memory, ref, effect[2]);
-        }
-      } else if (effect[0] === 'param') {
-        const parentScope = newState.scope;
-        const decl = effect[1];
-        const address = parentScope.limit - decl.type.size;
-        const ref = new PointerValue(pointerType(decl.type), address);
-        newState.scope = {
-          parent: parentScope,
-          key: parentScope.key + 1,
-          limit: address,
-          kind: 'param',
-          decl: decl,
-          ref: ref
-        };
-        if (effect[2] !== null) {
-          newState.memory = writeValue(newState.memory, ref, effect[2]);
-        }
-      } else {
-        newState = options.onEffect(newState, effect);
-      }
-    });
-  }
+  // Copy the step's result.
   if ('result' in step) {
     newState.result = step.result;
     newState.direction = 'up';
-    // TODO: attach the result to the node for visualisation.
   } else {
     newState.result = undefined;
     newState.direction = 'down';
   }
+  // Apply any effects.
+  if ('effects' in step) {
+    // Perform the side-effects.
+    step.effects.forEach(function (effect) {
+      applyEffect(newState, effect, options);
+    });
+  }
   return newState;
+};
+
+export const clearMemoryLog = function (state) {
+  return {...state, memoryLog: Immutable.List(), oldMemory: state.memory};
+};
+
+export const step = function (state, options) {
+  // Performs a single step.
+  const control = state.control;
+  if (!control) {
+    // Program is halted.
+    return state;
+  }
+  const step = getStep(state, control);
+  if ('error' in step) {
+    // Evaluation cannot proceed due to an error.
+    return {...state, error: step.error};
+  }
+  // Apply the effects.
+  return applyStep(state, step, options);
 };
 
 export const outOfCurrentStmt = function (state) {
