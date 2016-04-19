@@ -487,7 +487,7 @@ const stepAssignmentBinaryOperator = function (state, control) {
     const lhs = readValue(state.memory, lvalue);
     return {
       control: enterExpr(control.node[2][1], {...control, step: 2, lvalue, lhs}),
-      effects: ['load', lvalue]
+      effects: [['load', lvalue]]
     };
   } else {
     // After RHS.
