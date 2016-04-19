@@ -56,8 +56,7 @@ const applyVardeclEffect = function (state, effect) {
     ref: ref
   };
   if (effect[2] !== null) {
-    state.memory = writeValue(state.memory, ref, effect[2]);
-    state.writeLog = state.writeLog.push(ref);
+    applyStoreEffect(state, ['store', ref, effect[2]]);
   }
 };
 
@@ -75,8 +74,7 @@ const applyParamEffect = function (state, effect) {
     ref: ref
   };
   if (effect[2] !== null) {
-    state.memory = writeValue(state.memory, ref, effect[2]);
-    state.writeLog = state.writeLog.push(ref);
+    applyStoreEffect(state, ['store', ref, effect[2]]);
   }
 };
 
