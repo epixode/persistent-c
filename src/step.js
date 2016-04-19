@@ -325,7 +325,7 @@ const stepDeclRefExpr = function (state, control) {
       // interpreted as a pointer to the array.
       //     int a[1];  assert(a == &a);
       if (ref.type.pointee.kind === 'constant array') {
-        result = ref;
+        result = ref;  // XXX should be a pointer to first element
       } else {
         result = readValue(state.memory, ref);
         effects.push(['load', ref]);
