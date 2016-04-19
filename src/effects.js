@@ -92,7 +92,6 @@ export const defaultEffects = {
 // applyEffect applies an effect by shallowly mutating the passed state.
 export const applyEffect = function (state, effect, options) {
   const {effectHandlers} = options;
-  console.log('effect', effect);
   const handler = effectHandlers[effect[0]];
   if (typeof handler === 'function') {
     return handler(state, effect);
