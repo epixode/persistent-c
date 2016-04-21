@@ -230,7 +230,6 @@ const stepReturnStmt = function (state, control) {
   } while (!('return' in cont));
   return {
     control: cont,
-    effects: [['leave', cont.return]],
     result: state.result
   };
 };
@@ -275,26 +274,25 @@ const stepCallExpr = function (state, control) {
     // its formal parameters in its scope.
     const funcType = state.result;
     const funcNode = funcVal[1];
-    const funcBody = funcNode[2][2];
-    // The 'enter' effect references the function compound statement body
-    // (rather than the function node), so that the code handling falling
-    // through the end of a compound statement emits the appropriate 'leave'
-    // effect to clean up the function scope.
-    const effects = [['enter', 'function', funcBody]];
+    // The 'enter' effect references the function node, which is cleaned up in
+    // the 'R' step below when the call has returned.
+    // The function body, a compound statement, will emit another 'enter' event
+    // (and a corresponding 'leave' event when it exits).
+    const effects = [['enter', 'function', funcNode]];
     const params = funcType.params;
     for (let i = 0; i < params.length; i++) {
       effects.push(['param', params[i], values[i + 1]]);
     }
     // The control structure is marked with a 'return' property set to the
-    // function body node.  This is used to communicate to a return statement
-    // inside the block, a reference to the block for which to issue a 'leave'
-    // effect, and which control structure to use as the continuation (the R
-    // step of the call).
-    // The R step of the call also gets executed normally if evaluation falls
+    // function node.  This is used to communicate to a return statement which
+    // control structure to use as the continuation (that is, the 'R' step of
+    // the call).
+    // The 'R' step of the call also gets executed normally if evaluation falls
     // through the end of the function body.
+    const funcBody = funcNode[2][2];
     return {
       effects,
-      control: enterStmt(funcBody, {...control, return: funcBody, step: 'R'})
+      control: enterStmt(funcBody, {...control, return: true, step: 'R'})
     };
   }
   if (step === 'R') {
@@ -302,7 +300,9 @@ const stepCallExpr = function (state, control) {
     // an evaluation stop to display the result to the user.
     // The callee's scope was cleaned up by the return statement or falling
     // through the end of the compound statement.
+    const funcNode = funcVal[1];
     return {
+      effects: [['leave', funcNode]],
       control: control.cont,
       result: state.result
     };
