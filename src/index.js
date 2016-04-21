@@ -1,7 +1,7 @@
 
 import Immutable from 'immutable';
 
-import {allocate, writeValue} from './memory';
+import {allocate, readValue, writeValue} from './memory';
 import {pointerType} from './type';
 import {PointerValue} from './value';
 import {getStep} from './step';
