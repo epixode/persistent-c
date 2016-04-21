@@ -85,7 +85,7 @@ export const packValue = function (view, offset, value, littleEndian) {
           throw `pack scalar ${value.type.repr}`;
       }
       break;
-    case 'array':
+    case 'constant array':
       {
         const elemSize = value.type.elem.size;
         value.elements.forEach(function (elem, index) {
@@ -126,7 +126,7 @@ export const unpackValue = function (view, offset, type, littleEndian) {
         default:
           throw `unpack scalar ${type.repr}`;
       }
-    case 'array':
+    case 'constant array':
       {
         const elemType = type.elem;
         const elemSize = elemType.size;
