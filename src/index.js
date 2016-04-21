@@ -7,6 +7,8 @@ import {PointerValue} from './value';
 import {getStep} from './step';
 import {applyEffect} from './effects';
 
+export {pointerType} from './type';
+export {IntegralValue, FloatingValue, PointerValue} from './value';
 export {readValue} from './memory';
 export {getStep} from './step';
 export {defaultEffects} from './effects';
@@ -89,6 +91,39 @@ export const step = function (state, options) {
   }
   // Apply the effects.
   return applyStep(state, step, options);
+};
+
+
+const refsIntersect = function (ref1, ref2) {
+  const base1 = ref1.address, limit1 = base1 + ref1.type.size - 1;
+  const base2 = ref2.address, limit2 = base2 + ref2.type.size - 1;
+  const result = (base1 <= base2) ? (base2 <= limit1) : (base1 <= limit2);
+  return result;
+};
+
+export const inspectPointer = function (pointer, state) {
+  const {memoryLog, memory, oldMemory} = state;
+  const result = {type: pointer.type.pointee};
+  try {
+    result.value = readValue(memory, pointer);
+    memoryLog.forEach(function (entry, i) {
+      if (refsIntersect(pointer, entry[1])) {
+        if (entry[0] === 'load') {
+          if (result.load === undefined) {
+            result.load = i;
+          }
+        } else if (entry[0] === 'store') {
+          if (result.store === undefined) {
+            result.store = i;
+            result.prevValue = readValue(oldMemory, pointer);
+          }
+        }
+      }
+    });
+  } catch (err) {
+    result.error = err.toString();
+  }
+  return result;
 };
 
 export const outOfCurrentStmt = function (state) {
