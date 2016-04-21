@@ -542,7 +542,7 @@ const stepArraySubscriptExpr = function (state, control) {
       result = readValue(state.memory, ref);
       effects.push(['load', ref]);
     }
-    return {control: control.cont, result};
+    return {control: control.cont, result, effects};
   }
 };
 
