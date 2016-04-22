@@ -338,11 +338,11 @@ const stepDeclRefExpr = function (state, control) {
     if (control.mode === 'lvalue') {
       result = ref;
     } else {
-      // In C, a reference to a constant array declaration is implicitly
-      // interpreted as a pointer to the array.
-      //     int a[1];  assert(a == &a);
-      if (ref.type.pointee.kind === 'constant array') {
-        result = ref;  // XXX should be a pointer to first element
+      const varType = ref.type.pointee;
+      if (varType.kind === 'constant array') {
+        // A reference to a constant array evaluates to a pointer to the
+        // array's first element.
+        result = new PointerValue(pointerType(varType.elem), ref.address);
       } else {
         result = readValue(state.memory, ref);
         effects.push(['load', ref]);
