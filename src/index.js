@@ -7,9 +7,9 @@ import {PointerValue} from './value';
 import {getStep} from './step';
 import {applyEffect} from './effects';
 
-export {pointerType} from './type';
+export {pointerType, scalarTypes} from './type';
 export {IntegralValue, FloatingValue, PointerValue} from './value';
-export {readValue} from './memory';
+export {readValue, writeValue} from './memory';
 export {getStep} from './step';
 export {defaultEffects} from './effects';
 
