@@ -17,7 +17,7 @@ IntegralValue.prototype.toBool = function () {
 
 export function FloatingValue (type, number) {
   this.type = type;
-  this.number = type.size === 4 ? Math.fround(address) : address;
+  this.number = type.size === 4 ? Math.fround(number) : number;
 };
 FloatingValue.prototype.toString = function () {
   return this.number.toString();
