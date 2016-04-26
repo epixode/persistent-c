@@ -131,7 +131,7 @@ export const unpackValue = function (view, offset, type, littleEndian) {
         const elemType = type.elem;
         const elemSize = elemType.size;
         const elements = [];
-        for (var i = 0; i < type.count; i++) {
+        for (var index = 0; index < type.count; index++) {
           elements.push(unpackValue(view, offset + index * elemSize, elemType, littleEndian));
         }
         return new ConstantArrayValue(type, elements);
