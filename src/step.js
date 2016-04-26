@@ -309,10 +309,11 @@ const stepCallExpr = function (state, control) {
   }
 };
 
-const stepCastExpr = function (state, control) {
+const stepImplicitCastExpr = function (state, control) {
   const {step, node} = control;
   if (step === 0) {
     // An implicit cast is transparent w.r.t. the value/lvalue mode.
+    // XXX Does it really happen?
     return {
       control: enter(node[2][0], {...control, step: 1}, {mode: control.mode})
     };
@@ -325,6 +326,24 @@ const stepCastExpr = function (state, control) {
   }
   const value = control.value;
   const type = state.result;
+  const result = evalCast(type, value);
+  return {control: control.cont, result};
+};
+
+const stepExplicitCastExpr = function (state, control) {
+  const {step, node} = control;
+  if (step === 0) {
+    return {
+      control: enter(node[2][0], {...control, step: 1})
+    };
+  }
+  if (step === 1) {
+    return {
+      control: enterExpr(node[2][1], {...control, step: 2, type: state.result})
+    };
+  }
+  const type = control.type;
+  const value = state.result;
   const result = evalCast(type, value);
   return {control: control.cont, result};
 };
@@ -690,8 +709,9 @@ export const getStep = function (state, control) {
   case "CallExpr":
     return stepCallExpr(state, control);
   case "ImplicitCastExpr":
+    return stepImplicitCastExpr(state, control);
   case "CStyleCastExpr":
-    return stepCastExpr(state, control);
+    return stepExplicitCastExpr(state, control);
   case "DeclRefExpr":
     return stepDeclRefExpr(state, control);
   case "IntegerLiteral":
