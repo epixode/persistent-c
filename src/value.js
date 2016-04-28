@@ -229,7 +229,7 @@ export const evalCast = function (type, operand) {
       return new IntegralValue(type, operand.toInteger() & 0xffffffff);
     }
     if (type.repr === 'float') {
-      if (operand instanceof IntegralValue || operand instanceof IntegralValue) {
+      if (operand instanceof FloatingValue || operand instanceof IntegralValue) {
         return new FloatingValue(type, operand.number)
       }
     }

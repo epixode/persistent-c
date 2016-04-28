@@ -15,7 +15,7 @@ with the seq property set to true.  In C, sequence points occur:
 
 import {scalarTypes, pointerType, functionType, constantArrayType} from './type';
 import {
-  IntegralValue, PointerValue,
+  IntegralValue, FloatingValue, PointerValue,
   evalUnaryOperation, evalBinaryOperation, evalCast, evalPointerAdd} from './value';
 import {writeValue, readValue} from './memory';
 
@@ -605,10 +605,10 @@ const stepCharacterLiteral = function (state, control) {
 
 const stepFloatingLiteral = function (state, control) {
   const value = control.node[1].value;
-  // XXX use 'double' if value ends with 'l'
+  const type = /[fF]$/.test(value) ? scalarTypes['float'] : scalarTypes['double'];
   return {
     control: control.cont,
-    result: new FloatingValue(scalarTypes['float'], parseFloat(value))
+    result: new FloatingValue(type, parseFloat(value))
   };
 };
 
