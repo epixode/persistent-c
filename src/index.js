@@ -1,15 +1,15 @@
 
 import Immutable from 'immutable';
 
-import {allocate, readValue, writeValue} from './memory';
 import {pointerType} from './type';
 import {PointerValue} from './value';
+import {allocate, readValue, writeValue, readString} from './memory';
 import {getStep} from './step';
 import {applyEffect} from './effects';
 
 export {pointerType, scalarTypes} from './type';
 export {IntegralValue, FloatingValue, PointerValue, stringValue} from './value';
-export {readValue, writeValue} from './memory';
+export {readValue, writeValue, readString} from './memory';
 export {getStep} from './step';
 export {defaultEffects} from './effects';
 

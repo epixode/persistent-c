@@ -33,3 +33,18 @@ export const readValue = function (memory, ref) {
   }
   return unpackValue(view, 0, type.pointee, littleEndian);
 };
+
+export const readString = function (memory, ref) {
+  const {address} = ref;
+  let endAddress = address;
+  while (endAddress < memory.size && memory.get(endAddress) !== 0) {
+    endAddress += 1;
+  }
+  const charCount = endAddress - address;
+  const view = new DataView(new ArrayBuffer(charCount));
+  for (let offset = 0; offset < charCount; offset += 1) {
+    view.setInt8(offset, memory.get(address + offset));
+  }
+  const decoder = new TextDecoder("utf-8");
+  return decoder.decode(view);
+};
