@@ -199,25 +199,43 @@ const evalFloatingBinaryOperation = function (op, v1, v2) {
 };
 
 export const evalBinaryOperation = function (opcode, lhs, rhs) {
+  // Relational operators
   if (isRelational(opcode)) {
     const result = evalRelationalOperation(opcode, lhs.number, rhs.number);
     return new IntegralValue(scalarTypes['int'], result ? 1 : 0);
   }
+  // Integer arithmetic
   if (lhs instanceof IntegralValue && rhs instanceof IntegralValue) {
     const result = evalIntegerBinaryOperation(opcode, lhs.number, rhs.number);
     return new IntegralValue(lubType(lhs.type, rhs.type), result);
   }
+  // Float arithmetic
   if (lhs instanceof FloatingValue && rhs instanceof FloatingValue) {
     const result = evalFloatingBinaryOperation(opcode, lhs.number, rhs.number)
     return new FloatingValue(lubType(lhs.type, rhs.type), result);
   }
-  if (lhs instanceof PointerValue && rhs instanceof IntegralValue && opcode === 'Add') {
-    const address = lhs.address + rhs.number * lhs.type.pointee.size;
-    return new PointerValue(lhs.type, address);
+  // Pointer arithmetic
+  if (lhs instanceof PointerValue && rhs instanceof IntegralValue) {
+    if (opcode === 'Add') {
+      const address = lhs.address + rhs.number * lhs.type.pointee.size;
+      return new PointerValue(lhs.type, address);
+    }
+    if (opcode === 'Sub') {
+      const address = lhs.address - rhs.number * lhs.type.pointee.size;
+      return new PointerValue(lhs.type, address);
+    }
   }
-  if (lhs instanceof PointerValue && rhs instanceof PointerValue && opcode === 'Sub') {
-    const offset = lhs.address - rhs.address;
-    return new IntegralValue(scalarTypes['int'], offset);
+  if (lhs instanceof IntegralValue && rhs instanceof PointerValue) {
+    if (opcode === 'Add') {
+      const address = rhs.address + lhs.number * rhs.type.pointee.size;
+      return new PointerValue(rhs.type, address);
+    }
+  }
+  if (lhs instanceof PointerValue && rhs instanceof PointerValue) {
+    if (opcode === 'Sub') {
+      const offset = lhs.address - rhs.address;
+      return new IntegralValue(scalarTypes['int'], offset);
+    }
   }
   throw `not implemented: ${lhs} ${opcode} ${rhs}`;
 };
