@@ -2,7 +2,7 @@
 import Immutable from 'immutable';
 
 import {pointerType} from './type';
-import {PointerValue} from './value';
+import {PointerValue, stringValue} from './value';
 import {allocate, readValue, writeValue, readString} from './memory';
 import {getStep} from './step';
 import {applyEffect} from './effects';
@@ -16,37 +16,56 @@ export {defaultEffects} from './effects';
 export const start = function (context) {
   const {decls, builtins} = context;
 
-  // Built the map of global variables.
-  // The 'main' function is detected and currentNode is set to the body
-  // of that function.
-  let currentNode = null;
+  // Initialize the memory, control, and scope data structures.
+  const limit = 0x10000;
+  let memory = allocate(limit);
+  let heapStart = 0x100;
+  const writeLog = Immutable.List();
   const globalMap = {};
+  const scope = {key: 0, limit: limit};
+  const state = {globalMap, writeLog, scope};
+
+  // Built the map of global variables.
   // const intFunc = functionType(scalarTypes['int'], []);
-  decls.forEach(function (node) {
-    if (node[0] === 'FunctionDecl') {
-      const name = node[2][0][1].identifier;
-      // XXX: evaluate the types!
-      if (builtins && name in builtins) {
-        globalMap[name] = {name, value: ['builtin', builtins[name]]};
-      } else {
-        globalMap[name] = {name, value: ['function', node]};
+  decls.forEach(function (declNode) {
+
+    // Copy string literals to memory.
+    forEachNode(declNode, function (node) {
+      if (node[0] === 'StringLiteral') {
+        const value = stringValue(node[1].value);
+        const ref = new PointerValue(value.type, heapStart);
+        memory = writeValue(memory, ref, value);
+        heapStart += value.type.size;
+        node[1].ref = ref;
+        console.log('string', value, ref, heapStart);
+      }
+    });
+
+    // Add the declaration to the global map.
+    switch (declNode[0]) {
+      case 'FunctionDecl': {
+        const name = declNode[2][0][1].identifier;
+        // TODO: evaluate the type...
+        if (builtins && name in builtins) {
+          globalMap[name] = {name, value: ['builtin', builtins[name]]};
+        } else {
+          globalMap[name] = {name, value: ['function', declNode]};
+        }
+        break;
       }
     }
   });
 
-  // Initialize the memory, control, and scope data structures.
-  const limit = 0x10000;
-  const memory = allocate(limit);
-  const writeLog = Immutable.List();
-  const control = {
+  state.memory = memory;
+  state.heapStart = heapStart;
+
+  state.control = {
     node:
       ['CallExpr', {}, [
         ['DeclRefExpr', {}, [
           ['Name', {identifier: 'main'}, []]]]]],
     step: 0
   };
-  const scope = {key: 0, limit: limit};
-  const state = {globalMap, memory, writeLog, control, scope};
 
   return state;
 };
@@ -93,6 +112,17 @@ export const step = function (state, options) {
   return applyStep(state, step, options);
 };
 
+const forEachNode = function (node, callback) {
+  const queue = [[node]];
+  while (queue.length !== 0) {
+    queue.pop().forEach(function (node) {
+      callback(node);
+      if (node[2].length !== 0) {
+        queue.push(node[2]);
+      }
+    });
+  }
+};
 
 const refsIntersect = function (ref1, ref2) {
   const base1 = ref1.address, limit1 = base1 + ref1.pointee.type.size - 1;

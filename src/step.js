@@ -613,10 +613,9 @@ const stepFloatingLiteral = function (state, control) {
 };
 
 const stepStringLiteral = function (state, control) {
-  const value = control.node[1].value;
   return {
     control: control.cont,
-    result: ['string', value]  // XXX: convert to heap address
+    result: control.node[1].ref
   };
 };
 
