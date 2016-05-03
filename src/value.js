@@ -211,6 +211,14 @@ export const evalBinaryOperation = function (opcode, lhs, rhs) {
     const result = evalFloatingBinaryOperation(opcode, lhs.number, rhs.number)
     return new FloatingValue(lubType(lhs.type, rhs.type), result);
   }
+  if (lhs instanceof PointerValue && rhs instanceof IntegralValue && opcode === 'Add') {
+    const address = lhs.address + rhs.number * lhs.type.pointee.size;
+    return new PointerValue(lhs.type, address);
+  }
+  if (lhs instanceof PointerValue && rhs instanceof PointerValue && opcode === 'Sub') {
+    const offset = lhs.address - rhs.address;
+    return new IntegralValue(scalarTypes['int'], offset);
+  }
   throw `not implemented: ${lhs} ${opcode} ${rhs}`;
 };
 
