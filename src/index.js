@@ -43,6 +43,16 @@ export const start = function (context) {
 
     // Add the declaration to the global map.
     switch (declNode[0]) {
+      case 'VarDecl': {
+        const typeNode = declNode[2][0];
+        const initNode = declNode[2][1];
+        // const typeVal = evalExpr(state, typeNode);
+        // XXX allocate memory and create a pointer
+        // XXX if the initNode is an InitListExpr, store the pointer (and
+        //     0-initialized index) in the control structure while evaluating
+        //     the node.
+        break;
+      }
       case 'FunctionDecl': {
         const name = declNode[2][0][1].identifier;
         // TODO: evaluate the type...
