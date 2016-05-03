@@ -14,6 +14,32 @@ IntegralValue.prototype.toInteger = function () {
 IntegralValue.prototype.toBool = function () {
   return 0 !== this.number;
 };
+IntegralValue.prototype.pack = function (view, offset, littleEndian) {
+  switch (this.type.repr) {
+    case 'char':
+      view.setInt8(offset, this.number);
+      break;
+    case 'unsigned char':
+      view.setUint8(offset, this.number);
+      break;
+    case 'short':
+      view.setInt16(offset, this.number, littleEndian);
+      break;
+    case 'unsigned short':
+      view.setUint16(offset, this.number, littleEndian);
+      break;
+    case 'int':
+    case 'long':
+      view.setInt32(offset, this.number, littleEndian);
+      break;
+    case 'unsigned int':
+    case 'unsigned long':
+      view.setUint32(offset, this.number, littleEndian);
+      break;
+    default:
+      throw `cannot pack integral value ${this.type.repr}`;
+  }
+};
 
 export function FloatingValue (type, number) {
   this.type = type;
@@ -27,6 +53,18 @@ FloatingValue.prototype.toInteger = function () {
 };
 FloatingValue.prototype.toBool = function () {
   return 0 !== this.number;
+};
+FloatingValue.prototype.pack = function (view, offset, littleEndian) {
+  switch (this.type.repr) {
+    case 'float':
+      view.setFloat32(offset, this.number, littleEndian);
+      break;
+    case 'double':
+      view.setFloat64(offset, this.number, littleEndian);
+      break;
+    default:
+      throw `cannot pack floating value ${this.type.repr}`;
+  }
 };
 
 export function PointerValue (type, address) {
@@ -42,6 +80,9 @@ PointerValue.prototype.toInteger = function () {
 PointerValue.prototype.toBool = function () {
   return 0 !== this.address;
 };
+PointerValue.prototype.pack = function (view, offset, littleEndian) {
+  view.setUint32(offset, this.address, littleEndian);
+};
 
 export function ConstantArrayValue (type, elements) {
   this.type = type;
@@ -50,55 +91,15 @@ export function ConstantArrayValue (type, elements) {
 ConstantArrayValue.prototype.toString = function () {
   return `constant array`;
 };
+ConstantArrayValue.prototype.pack = function (view, offset, littleEndian) {
+  const elemSize = this.type.elem.size;
+  this.elements.forEach(function (elem, index) {
+    packValue(view, offset + index * elemSize, elem, littleEndian);
+  });
+};
 
 export const packValue = function (view, offset, value, littleEndian) {
-  switch (value.type.kind) {
-    case 'scalar':
-      switch (value.type.repr) {
-        case 'char':
-          view.setInt8(offset, value.number);
-          break;
-        case 'unsigned char':
-          view.setUint8(offset, value.number);
-          break;
-        case 'short':
-          view.setInt16(offset, value.number, littleEndian);
-          break;
-        case 'unsigned short':
-          view.setUint16(offset, value.number, littleEndian);
-          break;
-        case 'int':
-        case 'long':
-          view.setInt32(offset, value.number, littleEndian);
-          break;
-        case 'unsigned int':
-        case 'unsigned long':
-          view.setUint32(offset, value.number, littleEndian);
-          break;
-        case 'float':
-          view.setFloat32(offset, value.number, littleEndian);
-          break;
-        case 'double':
-          view.setFloat64(offset, value.number, littleEndian);
-          break;
-        default:
-          throw `pack scalar ${value.type.repr}`;
-      }
-      break;
-    case 'constant array':
-      {
-        const elemSize = value.type.elem.size;
-        value.elements.forEach(function (elem, index) {
-          packValue(view, offset + index * elemSize, elem, littleEndian);
-        });
-        break;
-      }
-    case 'pointer':
-      view.setUint32(offset, value.address, littleEndian);
-      break;
-    default:
-      throw `not implemented: pack ${value.type.kind}`;
-  }
+  value.pack(view, offset, littleEndian);
 };
 
 export const unpackValue = function (view, offset, type, littleEndian) {
