@@ -143,6 +143,20 @@ export const unpackValue = function (view, offset, type, littleEndian) {
   }
 };
 
+export const stringValue = function (string) {
+  const encoder = new TextEncoder('utf-8');
+  const bytesArray = encoder.encode(string);
+  const charType = scalarTypes['char'];
+  const charLen = bytesArray.length;
+  const chars = [];
+  for (let charPos = 0; charPos < charLen; charPos++) {
+    chars.push(new IntegralValue(charType, bytesArray[charPos]));
+  }
+  chars.push(new IntegralValue(charType, 0));
+  const lenValue = new IntegralValue(scalarTypes['int'], chars.length);
+  return new ConstantArrayValue(constantArrayType(charType, lenValue), chars);
+};
+
 const isRelational = function (op) {
   return /^(EQ|NE|LT|LE|GT|GE)$/.test(op);
 };
