@@ -1,5 +1,5 @@
 
-import {scalarTypes, lubType} from './type';
+import {scalarTypes, constantArrayType, lubType} from './type';
 
 export function IntegralValue (type, number) {
   this.type = type;
