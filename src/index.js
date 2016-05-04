@@ -37,7 +37,6 @@ export const start = function (context) {
         memory = writeValue(memory, ref, value);
         heapStart += value.type.size;
         node[1].ref = ref;
-        console.log('string', value, ref, heapStart);
       }
     });
 
