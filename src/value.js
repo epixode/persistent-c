@@ -6,7 +6,28 @@ export function IntegralValue (type, number) {
   this.number = number | 0;
 };
 IntegralValue.prototype.toString = function () {
-  return this.number.toString();
+  if (this.type.repr === 'char') {
+    if (this.number >= 32 && this.number < 128) {
+      switch (this.number) {
+        case 39: return '\\\'';
+        case 92: return '\\\\';
+        default: return `'${String.fromCharCode(this.number)}'`;
+      }
+    } else {
+      switch (this.number) {
+        case 0: return '\\0';
+        case 8: return '\\t';
+        case 10: return '\\r';
+        case 13: return '\\n';
+        default: {
+          const n = this.number + (this.number >= 0 ? 0 : 256);
+          return `'\\x${n.toString(16)}'`;
+        }
+      }
+    }
+  } else {
+    return this.number.toString();
+  }
 };
 IntegralValue.prototype.toInteger = function () {
   return this.number;
