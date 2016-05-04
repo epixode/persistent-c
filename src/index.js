@@ -166,6 +166,8 @@ export const inspectPointer = function (pointer, state) {
 };
 
 export const outOfCurrentStmt = function (state) {
+  if (state.control.return)
+    return true;
   return state.direction === 'down' && state.control.seq === 'stmt';
 };
 
