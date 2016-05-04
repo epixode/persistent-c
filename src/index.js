@@ -134,8 +134,8 @@ const forEachNode = function (node, callback) {
 };
 
 const refsIntersect = function (ref1, ref2) {
-  const base1 = ref1.address, limit1 = base1 + ref1.pointee.type.size - 1;
-  const base2 = ref2.address, limit2 = base2 + ref2.pointee.type.size - 1;
+  const base1 = ref1.address, limit1 = base1 + ref1.type.pointee.size - 1;
+  const base2 = ref2.address, limit2 = base2 + ref2.type.pointee.size - 1;
   const result = (base1 <= base2) ? (base2 <= limit1) : (base1 <= limit2);
   return result;
 };
