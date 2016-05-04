@@ -446,7 +446,7 @@ const stepDeref = function (state, control) {
       // As an lvalue (*a) reduces to a.
       return {control: control.cont, result: lvalue};
     }
-    const effects = ['load', lvalue];
+    const effects = [['load', lvalue]];
     const result = readValue(state.memory, lvalue);
     return {control: control.cont, result, effects};
   }
