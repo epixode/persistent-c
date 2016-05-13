@@ -1,6 +1,6 @@
 
 // TextEncoder shim for older browsers and Safari.
-import {TextEncoder} from 'text-encoding';
+import {TextEncoder} from 'text-encoding-utf-8';
 
 import {scalarTypes, constantArrayType, lubType} from './type';
 
