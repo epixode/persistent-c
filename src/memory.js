@@ -1,6 +1,7 @@
 
 import Immutable from 'immutable';
 import {packValue, unpackValue} from './value';
+import {TextDecoder} from 'text-encoding-utf-8';
 
 const littleEndian = false;
 
