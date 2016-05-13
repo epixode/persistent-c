@@ -1,4 +1,7 @@
 
+// TextEncoder shim for older browsers and Safari.
+import {TextEncoder} from 'text-encoding';
+
 import {scalarTypes, constantArrayType, lubType} from './type';
 
 export function IntegralValue (type, number) {

@@ -33,6 +33,7 @@
     "tape": "^4.4.0"
   },
   "dependencies": {
-    "immutable": "^3.7.6"
+    "immutable": "^3.7.6",
+    "text-encoding": "^0.6.0"
   }
 }
