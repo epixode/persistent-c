@@ -40,8 +40,7 @@ const findDeclaration = function (state, name) {
   if (name in state.globalMap) {
     return state.globalMap[name];
   }
-  console.log('findDeclaration error', state, name);
-  throw 'findDeclaration error';
+  throw new Error(`${name} is not in scope`);
 };
 
 const sizeOfExpr = function (state, node) {
@@ -59,7 +58,7 @@ const sizeOfExpr = function (state, node) {
         return ref.type.pointee.size;
       }
     default:
-      throw `sizeOfExpr ${JSON.stringify(node)}`
+      throw new Error(`sizeof ${node[0]} not implemented`);
   }
 };
 
@@ -372,12 +371,12 @@ const stepDeclRefExpr = function (state, control) {
     // we cheat and pretend that we read its value from memory.
     // We cannot take the address of such a declaration.
     if (control.mode === 'lvalue') {
-      throw `cannot take address of ${name[1].identifier}`;
+      throw new Error(`cannot take address of ${name[1].identifier}`);
     } else {
       result = ref.value;
     }
   } else {
-    throw `bad reference for ${name[1].identifier}: ${JSON.stringify(ref)}`;
+    throw new Error(`bad reference for ${name[1].identifier}: ${JSON.stringify(ref)}`);
   }
   return {control: control.cont, result, effects};
 };
