@@ -6,7 +6,11 @@ import {scalarTypes, constantArrayType, lubType} from './type';
 
 export function IntegralValue (type, number) {
   this.type = type;
-  this.number = number | 0;
+  if (this.type.repr.startsWith('unsigned')) {
+    this.number = number >>> 0;
+  } else {
+    this.number = number | 0;
+  }
 };
 IntegralValue.prototype.toString = function () {
   if (this.type.repr === 'char') {
@@ -70,7 +74,13 @@ export function FloatingValue (type, number) {
   this.number = type.size === 4 ? Math.fround(number) : number;
 };
 FloatingValue.prototype.toString = function () {
-  return this.number.toString();
+  let str = this.number.toFixed(6);
+  // Trim the trailing zeros, and the decimal point if there are no digits
+  // to its right.
+  str = str.replace(/(\.[0-9]*?)0+$/, function (m, n) {
+    return n === '.' ? '' : n;
+  });
+  return str;
 };
 FloatingValue.prototype.toInteger = function () {
   return this.number | 0;
