@@ -35,17 +35,26 @@ export const readValue = function (memory, ref) {
   return unpackValue(view, 0, type.pointee, littleEndian);
 };
 
-export const readString = function (memory, ref) {
+export const strlen = function (memory, ref, maxBytes) {
   const {address} = ref;
+  const limit = (maxBytes === undefined ? memory.size : Math.min(memory.size, address + maxBytes)) - 1;
   let endAddress = address;
-  while (endAddress < memory.size && memory.get(endAddress) !== 0) {
+  while (endAddress < limit && memory.get(endAddress) !== 0) {
     endAddress += 1;
   }
-  const charCount = endAddress - address;
-  const view = new DataView(new ArrayBuffer(charCount));
-  for (let offset = 0; offset < charCount; offset += 1) {
-    view.setInt8(offset, memory.get(address + offset));
+  return endAddress - address;
+};
+
+const readBytes = function (view, byteCount, memory, ref) {
+  for (let offset = 0; offset < byteCount; offset += 1) {
+    view.setInt8(offset, memory.get(ref.address + offset));
   }
+};
+
+export const readString = function (memory, ref, maxBytes) {
+  const byteCount = strlen(memory, ref, maxBytes);
+  const view = new DataView(new ArrayBuffer(byteCount));
+  readBytes(view, byteCount, memory, ref);
   const decoder = new TextDecoder("utf-8");
   return decoder.decode(view);
 };
