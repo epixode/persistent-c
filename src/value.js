@@ -213,7 +213,6 @@ const evalIntegerBinaryOperation = function (op, v1, v2) {
     case 'Sub': case 'SubAssign': return v1 - v2;
     case 'Mul': case 'MulAssign': return v1 * v2;
     case 'Div': case 'DivAssign': return v1 / v2;
-    // TODO: check Rem results on negative values
     case 'Rem': case 'RemAssign': return v1 % v2;
     case 'And': case 'AndAssign': return v1 & v2;
     case 'Or':  case 'OrAssign':  return v1 | v2;
