@@ -564,6 +564,25 @@ const stepArraySubscriptExpr = function (state, control) {
   }
 };
 
+const stepConditionalOperator = function (state, control) {
+  const {node, step} = control;
+  switch (step) {
+  case 0:
+    // Evaluate the condition operand.
+    return {control: enterExpr(node[2][0], {...control, step: 1})};
+  case 1:
+    // Evaluate the operand depending on the result's truthiness.
+    if (state.result.toBool()) {
+      return {control: enterStmt(node[2][1], {...control, step: 2})};
+    } else {
+      return {control: enterStmt(node[2][2], {...control, step: 2})};
+    }
+  case 2:
+    // Pass the result upwards.
+    return {control: control.cont, result: state.result};
+  }
+};
+
 const stepVarDecl = function (state, control) {
   // VarDecl children are [type, init?] (init is optional).
   const {step, node} = control;
@@ -749,6 +768,8 @@ export const getStep = function (state, control) {
     return stepAssignmentBinaryOperator(state, control);
   case 'ArraySubscriptExpr':
     return stepArraySubscriptExpr(state, control);
+  case 'ConditionalOperator':
+    return stepConditionalOperator(state, control);
   case 'BuiltinType':
     return stepBuiltinType(state, control);
   case 'PointerType':
