@@ -11,6 +11,7 @@ export {pointerType, scalarTypes} from './type';
 export {IntegralValue, FloatingValue, PointerValue, stringValue} from './value';
 export {readValue, writeValue, readString} from './memory';
 export {getStep} from './step';
+export {findClosestFunctionScope} from './scope';
 export {defaultEffects} from './effects';
 
 export const start = function (context) {
@@ -22,7 +23,8 @@ export const start = function (context) {
   let heapStart = 0x100;
   const writeLog = Immutable.List();
   const globalMap = {};
-  const scope = {key: 0, limit: limit};
+  // TODO: set up a proper 'main' function scope with argc/argv.
+  const scope = {key: 0, limit: limit, kind: 'function'};
   const state = {globalMap, writeLog, scope};
 
   // Built the map of global variables.
@@ -73,7 +75,8 @@ export const start = function (context) {
       ['CallExpr', {}, [
         ['DeclRefExpr', {}, [
           ['Name', {identifier: 'main'}, []]]]]],
-    step: 0
+    step: 0,
+    cont: null
   };
 
   return state;
@@ -81,23 +84,29 @@ export const start = function (context) {
 
 export const applyStep = function (state, step, options) {
   let newState = {...state};
-  // Update the control structure.
+  const effects = step.effects || [];
+  // Update the control structure, handling the special 'return' continuation.
   newState.control = step.control;
-  // Copy the step's result.
-  if ('result' in step) {
-    newState.result = step.result;
-    newState.direction = 'up';
+  if (step.control === 'return') {
+    // Transfering control to 'return' appends a 'return' effect, which avoids
+    // having a dummy return node to handle execution falling through the end
+    // of a block.
+    effects.push(['return', step.result]);
   } else {
-    newState.result = undefined;
-    newState.direction = 'down';
+    // Normal control transfer copies the step's result if present, and sets
+    // the direction accordingly.
+    if ('result' in step) {
+      newState.result = step.result;
+      newState.direction = 'up';
+    } else {
+      newState.result = undefined;
+      newState.direction = 'down';
+    }
   }
-  // Apply any effects.
-  if ('effects' in step) {
-    // Perform the side-effects.
-    step.effects.forEach(function (effect) {
-      applyEffect(newState, effect, options);
-    });
-  }
+  // Perform the side-effects.
+  effects.forEach(function (effect) {
+    applyEffect(newState, effect, options);
+  });
   return newState;
 };
 
@@ -168,7 +177,7 @@ export const inspectPointer = function (pointer, state) {
 export const outOfCurrentStmt = function (state) {
   if (state.control.return)
     return true;
-  return state.direction === 'down' && state.control.seq === 'stmt';
+  return /down|out/.test(state.direction) && state.control.seq === 'stmt';
 };
 
 export const intoNextStmt = function (state) {
@@ -176,5 +185,15 @@ export const intoNextStmt = function (state) {
 };
 
 export const intoNextExpr = function (state) {
-  return state.direction === 'down' && state.control.seq;
+  return /down|out/.test(state.direction) && state.control.seq;
+};
+
+export const notInNestedCall = function (scope, refScope) {
+  while (scope.key >= refScope.key) {
+    if (scope.kind === 'function') {
+      return false;
+    }
+    scope = scope.parent;
+  }
+  return true;
 };

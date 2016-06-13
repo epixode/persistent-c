@@ -92,7 +92,7 @@ const stepCompoundStmt = function (state, control) {
 
   // Set up a frame for the block's declarations when entering the block.
   if (step === 0) {
-    result.effects = [['enter', 'block', node]]
+    result.effects = [['enter', node]];
   }
 
   return result;
@@ -221,16 +221,11 @@ const stepIfStmt = function (state, control) {
 const stepReturnStmt = function (state, control) {
   const {node, step} = control;
   if (step === 0) {
+    // Evaluate the expression whose value to return.
     return {control: enterExpr(node[2][0], {...control, step: 1})};
   }
-  let cont = control;
-  do {
-    cont = cont.cont;
-  } while (!('return' in cont));
-  return {
-    control: cont,
-    result: state.result
-  };
+  // Transfering the control to 'return' indicates a function return.
+  return {control: 'return', result: state.result};
 };
 
 const stepCallExpr = function (state, control) {
@@ -273,35 +268,30 @@ const stepCallExpr = function (state, control) {
     // its formal parameters in its scope.
     const funcType = state.result;
     const funcNode = funcVal[1];
-    // The 'enter' effect references the function node, which is cleaned up in
-    // the 'R' step below when the call has returned.
-    // The function body, a compound statement, will emit another 'enter' event
-    // (and a corresponding 'leave' event when it exits).
-    const effects = [['enter', 'function', funcNode]];
+    // The 'call' effect will open a function scope and store in it the return
+    // continuation and the function call values.
+    const cont = {...control, step: 'R'};
+    const effects = [['call', cont, values]];
+    // Emit a 'vardecl' effect for each function argument.
     const params = funcType.params;
     for (let i = 0; i < params.length; i++) {
-      effects.push(['param', params[i], values[i + 1]]);
+      effects.push(['vardecl', params[i], values[i + 1]]);
     }
-    // The control structure is marked with a 'return' property set to the
-    // function node.  This is used to communicate to a return statement which
-    // control structure to use as the continuation (that is, the 'R' step of
-    // the call).
-    // The 'R' step of the call also gets executed normally if evaluation falls
-    // through the end of the function body.
+    // Transfer control to the function body (a compound statement), setting
+    // 'return' as the continuation to obtain the effect of a "return;"
+    // statement if execution falls through the end of the block.
     const funcBody = funcNode[2][2];
     return {
       effects,
-      control: enterStmt(funcBody, {...control, return: true, step: 'R'})
+      control: enterStmt(funcBody, 'return')
     };
   }
   if (step === 'R') {
-    // The R step catches the callee's result.  Its only use is to provide
-    // an evaluation stop to display the result to the user.
-    // The callee's scope was cleaned up by the return statement or falling
-    // through the end of the compound statement.
+    // The R step catches the callee's result and is only used as a stop to
+    // show the call's result to the user in the context of the caller (the
+    // callee's scope has already been entirely cleaned up at this point).
     const funcNode = funcVal[1];
     return {
-      effects: [['leave', funcNode]],
       control: control.cont,
       result: state.result
     };
