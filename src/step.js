@@ -14,8 +14,7 @@ with the seq property set to true.  In C, sequence points occur:
 */
 
 import {
-  scalarTypes, pointerType, functionType, constantArrayType,
-  pointerSize} from './type';
+  scalarTypes, pointerType, functionType, arrayType, pointerSize} from './type';
 import {
   IntegralValue, FloatingValue, PointerValue, BuiltinValue, FunctionValue,
   evalUnaryOperation, evalBinaryOperation, evalCast, evalPointerAdd} from './value';
@@ -335,9 +334,9 @@ const stepDeclRefExpr = function (state, control) {
       result = ref;
     } else {
       const varType = ref.type.pointee;
-      if (varType.kind === 'constant array') {
-        // A reference to a constant array evaluates to a pointer to the
-        // array's first element.
+      if (varType.kind === 'array') {
+        // A reference to an array evaluates to a pointer to the array's
+        // first element.
         result = new PointerValue(pointerType(varType.elem), ref.address);
       } else {
         result = readValue(state.memory, ref);
@@ -574,6 +573,7 @@ const stepVarDecl = function (state, control) {
   const {name} = control.node[1];
   const type = step === 1 ? state.result : control.type;
   const init = step === 2 ? state.result : null;
+  // TODO: fix incomplete array type based on init value
   const effects = [['vardecl', name, type, init]];
   return {control: control.cont, result: null, effects};
 };
@@ -638,7 +638,17 @@ const stepConstantArrayType = function (state, control) {
   }
   const {elemType} = control;
   const elemCount = state.result;
-  const result = constantArrayType(elemType, elemCount);
+  const result = arrayType(elemType, elemCount);
+  return {control: control.cont, result};
+};
+
+const stepIncompleteArrayType = function (state, control) {
+  const {node, step} = control;
+  if (step === 0) {
+    return {control: enter(node[2][0], {...control, step: 1})};
+  }
+  const elemType = state.result;
+  const result = arrayType(elemType, undefined);
   return {control: control.cont, result};
 };
 
@@ -672,6 +682,15 @@ const stepParmVarDecl = function (state, control) {
   const name = node[1].name;
   const type = state.result;
   return {control: control.cont, result: {name, type}};
+};
+
+const stepParenType = function (state, control) {
+  const {node, step} = control;
+  if (step === 0) {
+    return {control: enter(node[2][0], {...control, step: 1})};
+  } else {
+    return {control: control.cont, result: state.result};
+  }
 };
 
 export const getStep = function (state, control) {
@@ -751,11 +770,15 @@ export const getStep = function (state, control) {
     return stepPointerType(state, control);
   case 'ConstantArrayType':
     return stepConstantArrayType(state, control);
+  case 'IncompleteArrayType':
+    return stepIncompleteArrayType(state, control);
   case 'FunctionProtoType':
   case 'FunctionNoProtoType':
     return stepFunctionProtoType(state, control);
   case 'ParmVarDecl':
     return stepParmVarDecl(state, control);
+  case 'ParenType':
+    return stepParenType(state, control);
   }
   return {
     control,

@@ -2,7 +2,7 @@
 // TextEncoder shim for older browsers and Safari.
 import {TextEncoder} from 'text-encoding-utf-8';
 
-import {scalarTypes, constantArrayType, lubType} from './type';
+import {scalarTypes, arrayType, lubType} from './type';
 
 export function IntegralValue (type, number) {
   this.type = type;
@@ -118,14 +118,14 @@ PointerValue.prototype.pack = function (view, offset, littleEndian) {
   view.setUint32(offset, this.address, littleEndian);
 };
 
-export function ConstantArrayValue (type, elements) {
+export function ArrayValue (type, elements) {
   this.type = type;
   this.elements = elements;
 };
-ConstantArrayValue.prototype.toString = function () {
-  return `constant array`;
+ArrayValue.prototype.toString = function () {
+  return `array`;
 };
-ConstantArrayValue.prototype.pack = function (view, offset, littleEndian) {
+ArrayValue.prototype.pack = function (view, offset, littleEndian) {
   const elemSize = this.type.elem.size;
   this.elements.forEach(function (elem, index) {
     packValue(view, offset + index * elemSize, elem, littleEndian);
@@ -171,7 +171,7 @@ export const unpackValue = function (view, offset, type, littleEndian) {
         default:
           throw `unpack scalar ${type.repr}`;
       }
-    case 'constant array':
+    case 'array':
       {
         const elemType = type.elem;
         const elemSize = elemType.size;
@@ -179,7 +179,7 @@ export const unpackValue = function (view, offset, type, littleEndian) {
         for (var index = 0; index < type.count; index++) {
           elements.push(unpackValue(view, offset + index * elemSize, elemType, littleEndian));
         }
-        return new ConstantArrayValue(type, elements);
+        return new ArrayValue(type, elements);
       }
     case 'pointer':
       return new PointerValue(type, view.getUint32(offset, littleEndian));
@@ -199,7 +199,7 @@ export const stringValue = function (string) {
   }
   chars.push(new IntegralValue(charType, 0));
   const lenValue = new IntegralValue(scalarTypes['int'], chars.length);
-  return new ConstantArrayValue(constantArrayType(charType, lenValue), chars);
+  return new ArrayValue(arrayType(charType, lenValue), chars);
 };
 
 const isRelational = function (op) {

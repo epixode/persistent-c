@@ -26,8 +26,8 @@ export const pointerType = function (pointeeType) {
   return type;
 };
 
-export const constantArrayType = function (elemType, elemCount) {
-  const type = new Type('constant array', elemType.size * elemCount.toInteger());
+export const arrayType = function (elemType, elemCount) {
+  const type = new Type('array', elemCount && elemType.size * elemCount.toInteger());
   type.elem = elemType;
   type.count = elemCount;
   type.toString = function () {
