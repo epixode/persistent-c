@@ -1,7 +1,7 @@
 
 import {writeValue} from './memory';
-import {pointerType} from './type';
-import {PointerValue} from './value';
+import {scalarTypes, pointerType} from './type';
+import {IntegralValue, PointerValue} from './value';
 import {findClosestBlockScope, findClosestFunctionScope} from './scope';
 
 const applyLoadEffect = function (state, effect) {
@@ -58,6 +58,7 @@ const applyCallEffect = function (state, effect) {
 
 const applyReturnEffect = function (state, effect) {
   // ['return', result]
+  const result = effect[1];
   const scope = findClosestFunctionScope(state.scope);
   if (!scope) {
     console.log('stack underflow', state.scope, effect);
@@ -65,10 +66,16 @@ const applyReturnEffect = function (state, effect) {
   }
   // Pop all scopes up to and including the function's scope.
   state.scope = scope.parent;
-  // Transfer control to the caller's continuation,
+  // Transfer control to the caller's continuation…
   state.control = scope.cont;
-  // passing the return value.
-  state.result = effect[1];
+  // passing the return value to the caller (handling the special case for
+  // control leaving the 'main' function without a return statement, where
+  // C99 defines the result as being 0).
+  if (!result && scope.cont.values[0].name === 'main') {
+    state.result = new IntegralValue(scalarTypes['int'], 0);
+  } else {
+    state.result = result;
+  }
   // Set direction to 'out' to indicate that a function was exited.
   state.direction = 'out';
 };
