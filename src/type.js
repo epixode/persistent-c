@@ -1,5 +1,5 @@
 
-const pointerSize = 4;
+export const pointerSize = 4;
 
 export const Type = function (kind, size) {
   this.kind = kind;

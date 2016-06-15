@@ -13,34 +13,19 @@ with the seq property set to true.  In C, sequence points occur:
 
 */
 
-import {scalarTypes, pointerType, functionType, constantArrayType} from './type';
 import {
-  IntegralValue, FloatingValue, PointerValue,
+  scalarTypes, pointerType, functionType, constantArrayType,
+  pointerSize} from './type';
+import {
+  IntegralValue, FloatingValue, PointerValue, BuiltinValue, FunctionValue,
   evalUnaryOperation, evalBinaryOperation, evalCast, evalPointerAdd} from './value';
+import {findLocalDeclaration} from './scope';
 import {writeValue, readValue} from './memory';
 
 const one = new IntegralValue(scalarTypes['int'], 1);
 
 const findDeclaration = function (state, name) {
-  // Search in the local scope.
-  let scope = state.scope;
-  while (scope) {
-    const {decl} = scope;
-    if (decl && decl.name === name) {
-      // Return the PointerValue to the variable's memory location.
-      return scope.ref;
-    }
-    if (scope.kind === 'function') {
-      // Prevent searching outside of the function's scope.
-      break;
-    }
-    scope = scope.parent;
-  }
-  // Search in the global declarations.
-  if (name in state.globalMap) {
-    return state.globalMap[name];
-  }
-  throw new Error(`${name} is not in scope`);
+  return findLocalDeclaration(state.scope, name) || state.globalMap[name];
 };
 
 const sizeOfExpr = function (state, node) {
@@ -49,14 +34,16 @@ const sizeOfExpr = function (state, node) {
       return sizeOfExpr(state, node[2][0]);
     case 'DeclRefExpr':
       {
-        const name = node[2][0];
-        const ref = findDeclaration(state, name[1].identifier);
-        if ('value' in ref) {
-          // XXX non-addressable values have a 0 size.
-          return 0;
+        const nameNode = node[2][0];
+        const ref = findDeclaration(state, nameNode[1].identifier);
+        if (ref.type instanceof PointerValue) {
+          return ref.type.pointee.size;
+        } else {
+          return 1;  // give non-addressable values a size of 1
         }
-        return ref.type.pointee.size;
       }
+    case 'AddrOf':
+      return pointerSize;
     default:
       throw new Error(`sizeof ${node[0]} not implemented`);
   }
@@ -248,13 +235,13 @@ const stepCallExpr = function (state, control) {
     }
     const funcVal = values[0];
     // All arguments have been evaluated, perform the call.
-    if (funcVal[0] === 'builtin') {
+    if (funcVal instanceof BuiltinValue) {
       // A builtin function handles the rest of the call step.
-      return funcVal[1](state, control.cont, values);
+      return funcVal.func(state, control.cont, values);
     }
-    if (funcVal[0] === 'function') {
+    if (funcVal instanceof FunctionValue) {
       // A user-defined function holds the FunctionDecl node.
-      const funcNode = funcVal[1];
+      const funcNode = funcVal.decl;
       const funcTypeNode = funcNode[2][1];
       return {
         control: enter(funcTypeNode, {...control, step: 'F', values})
@@ -263,11 +250,11 @@ const stepCallExpr = function (state, control) {
     return {control, error: `call error ${funcVal}`};
   }
   const funcVal = values[0];
+  const funcNode = funcVal.decl;
   if (step === 'F') {
     // The F step uses the evaluated type of the callee to set up the values of
     // its formal parameters in its scope.
     const funcType = state.result;
-    const funcNode = funcVal[1];
     // The 'call' effect will open a function scope and store in it the return
     // continuation and the function call values.
     const cont = {...control, step: 'R'};
@@ -275,7 +262,9 @@ const stepCallExpr = function (state, control) {
     // Emit a 'vardecl' effect for each function argument.
     const params = funcType.params;
     for (let i = 0; i < params.length; i++) {
-      effects.push(['vardecl', params[i], values[i + 1]]);
+      const {name, type} = params[i];
+      const init = i + 1 >= values.length ? null : values[1 + i];
+      effects.push(['vardecl', name, type, init]);
     }
     // Transfer control to the function body (a compound statement), setting
     // 'return' as the continuation to obtain the effect of a "return;"
@@ -288,9 +277,8 @@ const stepCallExpr = function (state, control) {
   }
   if (step === 'R') {
     // The R step catches the callee's result and is only used as a stop to
-    // show the call's result to the user in the context of the caller (the
-    // callee's scope has already been entirely cleaned up at this point).
-    const funcNode = funcVal[1];
+    // show the call's result while the function and arguments are still
+    // accessible (as control.values).
     return {
       control: control.cont,
       result: state.result
@@ -338,8 +326,8 @@ const stepExplicitCastExpr = function (state, control) {
 };
 
 const stepDeclRefExpr = function (state, control) {
-  const name = control.node[2][0];
-  const ref = findDeclaration(state, name[1].identifier);
+  const nameNode = control.node[2][0];
+  const ref = findDeclaration(state, nameNode[1].identifier);
   const effects = [];
   let result;
   if (ref instanceof PointerValue) {
@@ -356,17 +344,14 @@ const stepDeclRefExpr = function (state, control) {
         effects.push(['load', ref]);
       }
     }
-  } else if ('value' in ref) {
-    // If findDeclaration returns an object which does not have an address,
-    // we cheat and pretend that we read its value from memory.
-    // We cannot take the address of such a declaration.
+  } else {
+    // If findDeclaration returns a non-pointer value (typically a function or
+    // a builtin), use the value directly and disallow taking its address.
     if (control.mode === 'lvalue') {
       throw new Error(`cannot take address of ${name[1].identifier}`);
     } else {
-      result = ref.value;
+      result = ref;
     }
-  } else {
-    throw new Error(`bad reference for ${name[1].identifier}: ${JSON.stringify(ref)}`);
   }
   return {control: control.cont, result, effects};
 };
@@ -589,7 +574,7 @@ const stepVarDecl = function (state, control) {
   const {name} = control.node[1];
   const type = step === 1 ? state.result : control.type;
   const init = step === 2 ? state.result : null;
-  const effects = [['vardecl', {name, type}, init]];
+  const effects = [['vardecl', name, type, init]];
   return {control: control.cont, result: null, effects};
 };
 

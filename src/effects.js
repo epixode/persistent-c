@@ -25,8 +25,8 @@ const applyEnterEffect = function (state, effect) {
   state.scope = {
     parent: parentScope,
     key: parentScope.key + 1,
-    kind: 'block',
     limit: parentScope.limit,
+    kind: 'block',
     blockNode
   }
 };
@@ -49,8 +49,8 @@ const applyCallEffect = function (state, effect) {
   state.scope = {
     parent: parentScope,
     key: parentScope.key + 1,
-    kind: 'function',
     limit: parentScope.limit,
+    kind: 'function',
     cont,
     values
   };
@@ -75,19 +75,20 @@ const applyReturnEffect = function (state, effect) {
 
 const applyVardeclEffect = function (state, effect) {
   const parentScope = state.scope;
-  const decl = effect[1];
-  const address = parentScope.limit - decl.type.size;
-  const ref = new PointerValue(pointerType(decl.type), address);
+  const name = effect[1];
+  const type = effect[2];
+  const init = effect[3];
+  const address = parentScope.limit - type.size;
+  const ref = new PointerValue(pointerType(type), address);
   state.scope = {
     parent: parentScope,
     key: parentScope.key + 1,
-    kind: 'vardecl',
     limit: address,
-    decl: decl,
-    ref: ref
+    kind: 'variable',
+    name, type, ref
   };
-  if (effect[2] !== null) {
-    applyStoreEffect(state, ['store', ref, effect[2]]);
+  if (init) {
+    applyStoreEffect(state, ['store', ref, init]);
   }
 };
 

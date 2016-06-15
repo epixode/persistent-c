@@ -2,13 +2,15 @@
 import Immutable from 'immutable';
 
 import {pointerType} from './type';
-import {PointerValue, stringValue} from './value';
+import {PointerValue, stringValue, BuiltinValue, FunctionValue} from './value';
 import {allocate, readValue, writeValue, readString} from './memory';
 import {getStep} from './step';
 import {applyEffect} from './effects';
 
 export {pointerType, scalarTypes} from './type';
-export {IntegralValue, FloatingValue, PointerValue, stringValue} from './value';
+export {
+  IntegralValue, FloatingValue, PointerValue, stringValue,
+  BuiltinValue, FunctionValue} from './value';
 export {readValue, writeValue, readString} from './memory';
 export {getStep} from './step';
 export {findClosestFunctionScope} from './scope';
@@ -24,7 +26,7 @@ export const start = function (context) {
   const writeLog = Immutable.List();
   const globalMap = {};
   // TODO: set up a proper 'main' function scope with argc/argv.
-  const scope = {key: 0, limit: limit, kind: 'function'};
+  let scope = {key: 0, limit: limit};
   const state = {globalMap, writeLog, scope};
 
   // Built the map of global variables.
@@ -58,9 +60,9 @@ export const start = function (context) {
         const name = declNode[2][0][1].identifier;
         // TODO: evaluate the type...
         if (builtins && name in builtins) {
-          globalMap[name] = {name, value: ['builtin', builtins[name]]};
+          globalMap[name] = new BuiltinValue(name, builtins[name]);
         } else {
-          globalMap[name] = {name, value: ['function', declNode]};
+          globalMap[name] = new FunctionValue(declNode);
         }
         break;
       }

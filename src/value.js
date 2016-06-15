@@ -132,6 +132,16 @@ ConstantArrayValue.prototype.pack = function (view, offset, littleEndian) {
   });
 };
 
+export function FunctionValue (decl) {
+  this.decl = decl;
+  this.name = decl[2][0][1].identifier;
+};
+
+export function BuiltinValue (name, func) {
+  this.name = name;
+  this.func = func;
+};
+
 export const packValue = function (view, offset, value, littleEndian) {
   value.pack(view, offset, littleEndian);
 };
@@ -320,7 +330,7 @@ export const evalCast = function (type, operand) {
     if (operand instanceof IntegralValue) {
       return new PointerValue(type, operand.toInteger())
     }
-    if (/^(builtin|function|string)$/.test(operand[0])) {
+    if (operand instanceof BuiltinValue || operand instanceof FunctionValue) {
       // XXX temporary cheat for non-addressable values.
       return operand;
     }
