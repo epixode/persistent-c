@@ -27,7 +27,7 @@ export const start = function (context) {
   const globalMap = {};
   // TODO: set up a proper 'main' function scope with argc/argv.
   let scope = {key: 0, limit: limit};
-  const state = {globalMap, writeLog, scope};
+  const core = {globalMap, writeLog, scope};
 
   // Built the map of global variables.
   // const intFunc = functionType(scalarTypes['int'], []);
@@ -69,10 +69,10 @@ export const start = function (context) {
     }
   });
 
-  state.memory = memory;
-  state.heapStart = heapStart;
+  core.memory = memory;
+  core.heapStart = heapStart;
 
-  state.control = {
+  core.control = {
     node:
       ['CallExpr', {}, [
         ['DeclRefExpr', {}, [
@@ -81,14 +81,16 @@ export const start = function (context) {
     cont: null
   };
 
-  return state;
+  return core;
 };
 
 export const applyStep = function (state, step, options) {
-  let newState = {...state};
+  // Make fresh objects that can be imperatively updated during the step.
+  const newCore = {...state.core};
+  const newState = {...state, core: newCore};
   const effects = step.effects || [];
   // Update the control structure, handling the special 'return' continuation.
-  newState.control = step.control;
+  newCore.control = step.control;
   if (step.control === 'return') {
     // Transfering control to 'return' appends a 'return' effect, which avoids
     // having a dummy return node to handle execution falling through the end
@@ -98,11 +100,11 @@ export const applyStep = function (state, step, options) {
     // Normal control transfer copies the step's result if present, and sets
     // the direction accordingly.
     if ('result' in step) {
-      newState.result = step.result;
-      newState.direction = 'up';
+      newCore.result = step.result;
+      newCore.direction = 'up';
     } else {
-      newState.result = undefined;
-      newState.direction = 'down';
+      newCore.result = undefined;
+      newCore.direction = 'down';
     }
   }
   // Perform the side-effects.
@@ -112,18 +114,18 @@ export const applyStep = function (state, step, options) {
   return newState;
 };
 
-export const clearMemoryLog = function (state) {
-  return {...state, memoryLog: Immutable.List(), oldMemory: state.memory};
+export const clearMemoryLog = function (core) {
+  return {...core, memoryLog: Immutable.List(), oldMemory: core.memory};
 };
 
 export const step = function (state, options) {
   // Performs a single step.
-  const control = state.control;
+  const control = state.core.control;
   if (!control) {
     // Program is halted.
     return state;
   }
-  const step = getStep(state, control);
+  const step = getStep(state.core, control);
   if ('error' in step) {
     // Evaluation cannot proceed due to an error.
     return {...state, error: step.error};
@@ -176,18 +178,18 @@ export const inspectPointer = function (pointer, state) {
   return result;
 };
 
-export const outOfCurrentStmt = function (state) {
-  if (state.control.return)
+export const outOfCurrentStmt = function (core) {
+  if (core.control.return)
     return true;
-  return /down|out/.test(state.direction) && state.control.seq === 'stmt';
+  return /down|out/.test(core.direction) && core.control.seq === 'stmt';
 };
 
-export const intoNextStmt = function (state) {
-  return !/^(CompoundStmt|IfStmt|WhileStmt|DoStmt|ForStmt)$/.test(state.control.node[0]);
+export const intoNextStmt = function (core) {
+  return !/^(CompoundStmt|IfStmt|WhileStmt|DoStmt|ForStmt)$/.test(core.control.node[0]);
 };
 
-export const intoNextExpr = function (state) {
-  return /down|out/.test(state.direction) && state.control.seq;
+export const intoNextExpr = function (core) {
+  return /down|out/.test(core.direction) && core.control.seq;
 };
 
 export const notInNestedCall = function (scope, refScope) {

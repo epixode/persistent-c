@@ -6,23 +6,26 @@ import {findClosestBlockScope, findClosestFunctionScope} from './scope';
 
 const applyLoadEffect = function (state, effect) {
   // ['load', ref]
+  const {core} = state;
   const ref = effect[1];
-  state.memoryLog = state.memoryLog.push(effect);
+  core.memoryLog = core.memoryLog.push(effect);
 };
 
 const applyStoreEffect = function (state, effect) {
   // ['store', ref, value]
+  const {core} = state;
   const ref = effect[1];
   const value = effect[2];
-  state.memory = writeValue(state.memory, ref, value);
-  state.memoryLog = state.memoryLog.push(effect);
+  core.memory = writeValue(core.memory, ref, value);
+  core.memoryLog = core.memoryLog.push(effect);
 };
 
 const applyEnterEffect = function (state, effect) {
   // ['enter', blockNode]
-  const parentScope = state.scope;
+  const {core} = state;
+  const parentScope = core.scope;
   const blockNode = effect[1];
-  state.scope = {
+  core.scope = {
     parent: parentScope,
     key: parentScope.key + 1,
     limit: parentScope.limit,
@@ -33,20 +36,22 @@ const applyEnterEffect = function (state, effect) {
 
 const applyLeaveEffect = function (state, effect) {
   // ['leave', blockNode]
-  const scope = findClosestBlockScope(state.scope, effect[1]);
+  const {core} = state;
+  const scope = findClosestBlockScope(core.scope, effect[1]);
   if (!scope) {
-    console.log('stack underflow', state.scope, effect);
+    console.log('stack underflow', core.scope, effect);
     throw new Error('stack underflow');
   }
-  state.scope = scope.parent;
+  core.scope = scope.parent;
 };
 
 const applyCallEffect = function (state, effect) {
   // ['call', cont, [func, args...]]
-  const parentScope = state.scope;
+  const {core} = state;
+  const parentScope = core.scope;
   const cont = effect[1];
   const values = effect[2];
-  state.scope = {
+  core.scope = {
     parent: parentScope,
     key: parentScope.key + 1,
     limit: parentScope.limit,
@@ -58,36 +63,39 @@ const applyCallEffect = function (state, effect) {
 
 const applyReturnEffect = function (state, effect) {
   // ['return', result]
+  const {core} = state;
   const result = effect[1];
-  const scope = findClosestFunctionScope(state.scope);
+  const scope = findClosestFunctionScope(core.scope);
   if (!scope) {
-    console.log('stack underflow', state.scope, effect);
+    console.log('stack underflow', core.scope, effect);
     throw new Error('stack underflow');
   }
   // Pop all scopes up to and including the function's scope.
-  state.scope = scope.parent;
+  core.scope = scope.parent;
   // Transfer control to the caller's continuation…
-  state.control = scope.cont;
+  core.control = scope.cont;
   // passing the return value to the caller (handling the special case for
   // control leaving the 'main' function without a return statement, where
   // C99 defines the result as being 0).
   if (!result && scope.cont.values[0].name === 'main') {
-    state.result = new IntegralValue(scalarTypes['int'], 0);
+    core.result = new IntegralValue(scalarTypes['int'], 0);
   } else {
-    state.result = result;
+    core.result = result;
   }
   // Set direction to 'out' to indicate that a function was exited.
-  state.direction = 'out';
+  core.direction = 'out';
 };
 
 const applyVardeclEffect = function (state, effect) {
-  const parentScope = state.scope;
+  // ['vardecl', name, type, init]
+  const {core} = state;
+  const parentScope = core.scope;
   const name = effect[1];
   const type = effect[2];
   const init = effect[3];
   const address = parentScope.limit - type.size;
   const ref = new PointerValue(pointerType(type), address);
-  state.scope = {
+  core.scope = {
     parent: parentScope,
     key: parentScope.key + 1,
     limit: address,
