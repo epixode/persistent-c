@@ -278,7 +278,7 @@ export const evalUnaryOperation = function (opcode, operand) {
     switch (opcode) {
       case 'Plus': return operand;
       case 'Minus': return new IntegralValue(operand.type, -operand.number);
-      case 'LNot': return new IntegralValue(scalarTypes['int'], operand.number ? 1 : 0);
+      case 'LNot': return new IntegralValue(scalarTypes['int'], !operand.toBool());
       case 'Not': return new IntegralValue(operand.type, ~operand.number);
     }
   }
