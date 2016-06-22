@@ -25,7 +25,6 @@ export const start = function (context) {
   let heapStart = 0x100;
   const writeLog = Immutable.List();
   const globalMap = {};
-  // TODO: set up a proper 'main' function scope with argc/argv.
   let scope = {key: 0, limit: limit};
   const core = {globalMap, writeLog, scope};
 
@@ -45,6 +44,7 @@ export const start = function (context) {
     });
 
     // Add the declaration to the global map.
+    // TODO: evaluate the types and init values
     switch (declNode[0]) {
       case 'VarDecl': {
         const typeNode = declNode[2][0];
@@ -58,7 +58,6 @@ export const start = function (context) {
       }
       case 'FunctionDecl': {
         const name = declNode[2][0][1].identifier;
-        // TODO: evaluate the type...
         if (builtins && name in builtins) {
           globalMap[name] = new BuiltinValue(name, builtins[name]);
         } else {
@@ -72,6 +71,7 @@ export const start = function (context) {
   core.memory = memory;
   core.heapStart = heapStart;
 
+  // TODO: pass argc, argv to 'main'
   core.control = {
     node:
       ['CallExpr', {}, [
