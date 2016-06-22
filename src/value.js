@@ -6,7 +6,7 @@ import {scalarTypes, constantArrayType, lubType} from './type';
 
 export function IntegralValue (type, number) {
   this.type = type;
-  if (this.type.repr.startsWith('unsigned')) {
+  if (/^unsigned/.test(this.type.repr)) {
     this.number = number >>> 0;
   } else {
     this.number = number | 0;
