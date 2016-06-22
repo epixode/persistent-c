@@ -6,7 +6,7 @@ import {scalarTypes, arrayType, lubType} from './type';
 
 export function IntegralValue (type, number) {
   this.type = type;
-  if (this.type.repr.startsWith('unsigned')) {
+  if (/^unsigned/.test(this.type.repr)) {
     this.number = number >>> 0;
   } else {
     this.number = number | 0;
@@ -288,7 +288,7 @@ export const evalUnaryOperation = function (opcode, operand) {
     switch (opcode) {
       case 'Plus': return operand;
       case 'Minus': return new IntegralValue(operand.type, -operand.number);
-      case 'LNot': return new IntegralValue(scalarTypes['int'], operand.number ? 1 : 0);
+      case 'LNot': return new IntegralValue(scalarTypes['int'], !operand.toBool());
       case 'Not': return new IntegralValue(operand.type, ~operand.number);
     }
   }
