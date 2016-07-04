@@ -120,12 +120,11 @@ export const clearMemoryLog = function (core) {
 
 export const step = function (state, options) {
   // Performs a single step.
-  const control = state.core.control;
-  if (!control) {
+  if (!state.core.control) {
     // Program is halted.
     return state;
   }
-  const step = getStep(state.core, control);
+  const step = getStep(state.core);
   if ('error' in step) {
     // Evaluation cannot proceed due to an error.
     return {...state, error: step.error};

@@ -693,7 +693,8 @@ const stepParenType = function (core, control) {
   }
 };
 
-export const getStep = function (core, control) {
+export const getStep = function (core) {
+  const {control} = core;
   switch (control.node[0]) {
   case 'CompoundStmt':
     return stepCompoundStmt(core, control);
