@@ -286,7 +286,7 @@ const stepCallExpr = function (core, control) {
 };
 
 const stepImplicitCastExpr = function (core, control) {
-  const {step, node} = control;
+  const {node, step} = control;
   if (step === 0) {
     // An implicit cast is transparent w.r.t. the value/lvalue mode.
     // XXX Does it really happen?
@@ -307,7 +307,7 @@ const stepImplicitCastExpr = function (core, control) {
 };
 
 const stepExplicitCastExpr = function (core, control) {
-  const {step, node} = control;
+  const {node, step} = control;
   if (step === 0) {
     return {
       control: enter(node[2][0], {...control, step: 1})
@@ -559,7 +559,7 @@ const stepConditionalOperator = function (core, control) {
 
 const stepVarDecl = function (core, control) {
   // VarDecl children are [type, init?] (init is optional).
-  const {step, node} = control;
+  const {node, step} = control;
   // The type is evaluated in case it contains expressions,
   // as for instance in the case of ConstantArrayType.
   if (step === 0) {
