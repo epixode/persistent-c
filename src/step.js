@@ -23,18 +23,18 @@ import {writeValue, readValue} from './memory';
 
 const one = new IntegralValue(scalarTypes['int'], 1);
 
-const findDeclaration = function (state, name) {
-  return findLocalDeclaration(state.scope, name) || state.globalMap[name];
+const findDeclaration = function (core, name) {
+  return findLocalDeclaration(core.scope, name) || core.globalMap[name];
 };
 
-const sizeOfExpr = function (state, node) {
+const sizeOfExpr = function (core, node) {
   switch (node[0]) {
     case 'ParenExpr':
-      return sizeOfExpr(state, node[2][0]);
+      return sizeOfExpr(core, node[2][0]);
     case 'DeclRefExpr':
       {
         const nameNode = node[2][0];
-        const ref = findDeclaration(state, nameNode[1].identifier);
+        const ref = findDeclaration(core, nameNode[1].identifier);
         if (ref.type instanceof PointerValue) {
           return ref.type.pointee.size;
         } else {
@@ -60,7 +60,7 @@ const enterStmt = function (node, cont, attrs) {
   return {node, step: 0, cont, seq: 'stmt', ...attrs};
 };
 
-const stepCompoundStmt = function (state, control) {
+const stepCompoundStmt = function (core, control) {
   const {node, step} = control;
 
   // When falling through the end of the block, issue a 'leave' effect to
@@ -84,7 +84,7 @@ const stepCompoundStmt = function (state, control) {
   return result;
 };
 
-const stepDeclStmt = function (state, control) {
+const stepDeclStmt = function (core, control) {
   const {node, step} = control;
   if (step < node[2].length) {
     // Pass control to the next child, setting up the continuation
@@ -97,7 +97,7 @@ const stepDeclStmt = function (state, control) {
   return {control: control.cont, result: null};
 };
 
-const stepParenExpr = function (state, control) {
+const stepParenExpr = function (core, control) {
   if (control.step === 0) {
     // ParenExpr is transparent w.r.t. the evaluation mode (value/lvalue).
     return {
@@ -105,12 +105,12 @@ const stepParenExpr = function (state, control) {
         control.node[2][0], {...control, step: 1}, {mode: control.mode})
     };
   } else {
-    const result = state.result;
+    const result = core.result;
     return {control: control.cont, result};
   }
 };
 
-const stepForStmt = function (state, control) {
+const stepForStmt = function (core, control) {
   const {node, step} = control;
   if (step === 0) {
     // enter init, continue w/ step 1
@@ -126,14 +126,14 @@ const stepForStmt = function (state, control) {
   }
   if (step === 3) {
     // result ? (enter body, continue w/ step 2) : leave
-    if (state.result.toBool()) {
+    if (core.result.toBool()) {
       return {control: enterStmt(node[2][3], {...control, step: 2, break: 4})};
     }
   }
   return {control: control.cont, result: null};
 };
 
-const stepWhileStmt = function (state, control) {
+const stepWhileStmt = function (core, control) {
   const {node, step} = control;
   if (step === 0) {
     // enter cond, continue w/ step 1
@@ -141,14 +141,14 @@ const stepWhileStmt = function (state, control) {
   }
   if (step === 1) {
     // result ? (enter body, continue w/ step 0) : leave
-    if (state.result.toBool()) {
+    if (core.result.toBool()) {
       return {control: enterStmt(node[2][1], {...control, step: 0, break: 2})};
     }
   }
   return {control: control.cont, result: null};
 };
 
-const stepDoStmt = function (state, control) {
+const stepDoStmt = function (core, control) {
   const {node, step} = control;
   if (step === 0) {
     // enter body, continue w/ step 1
@@ -160,7 +160,7 @@ const stepDoStmt = function (state, control) {
   }
   if (step === 2) {
     // result ? (enter body, continue w/ step 1) : leave
-    if (state.result.toBool()) {
+    if (core.result.toBool()) {
       const cont = {...control, step: 1, break: 3};
       return {control: enterStmt(node[2][0], cont)};
     }
@@ -168,7 +168,7 @@ const stepDoStmt = function (state, control) {
   return {control: control.cont, result: null};
 };
 
-const stepBreakStmt = function (state, control) {
+const stepBreakStmt = function (core, control) {
   let cont = control;
   do {
     cont = cont.cont;
@@ -176,7 +176,7 @@ const stepBreakStmt = function (state, control) {
   return {control: {...cont, step: cont.break, seq: 'stmt'}, result: null};
 };
 
-const stepContinueStmt = function (state, control) {
+const stepContinueStmt = function (core, control) {
   let cont = control;
   do {
     cont = cont.cont;
@@ -184,14 +184,14 @@ const stepContinueStmt = function (state, control) {
   return {control: {...cont, seq: 'stmt'}, result: null};
 };
 
-const stepIfStmt = function (state, control) {
+const stepIfStmt = function (core, control) {
   const {node, step} = control;
   switch (step) {
   case 0:
     // No 'statement' boundary around the condition.
     return {control: enterExpr(node[2][0], {...control, step: 1})};
   case 1:
-    if (state.result.toBool()) {
+    if (core.result.toBool()) {
       return {control: enterStmt(node[2][1], {...control, step: 2})};
     } else {
       if (node[2].length === 3)
@@ -204,17 +204,17 @@ const stepIfStmt = function (state, control) {
   }
 };
 
-const stepReturnStmt = function (state, control) {
+const stepReturnStmt = function (core, control) {
   const {node, step} = control;
   if (step === 0) {
     // Evaluate the expression whose value to return.
     return {control: enterExpr(node[2][0], {...control, step: 1})};
   }
   // Transfering the control to 'return' indicates a function return.
-  return {control: 'return', result: state.result};
+  return {control: 'return', result: core.result};
 };
 
-const stepCallExpr = function (state, control) {
+const stepCallExpr = function (core, control) {
   const {node, step} = control;
   // Numeric steps accumulate the results of evaluating each child expression.
   let values = control.values;
@@ -223,7 +223,7 @@ const stepCallExpr = function (state, control) {
       values = [];
     } else {
       values = values.slice();
-      values.push(state.result);
+      values.push(core.result);
     }
     if (step < node[2].length) {
       // Pass control to the next child, setting up the continuation
@@ -236,7 +236,7 @@ const stepCallExpr = function (state, control) {
     // All arguments have been evaluated, perform the call.
     if (funcVal instanceof BuiltinValue) {
       // A builtin function handles the rest of the call step.
-      return funcVal.func(state, control.cont, values);
+      return funcVal.func(core, control.cont, values);
     }
     if (funcVal instanceof FunctionValue) {
       // A user-defined function holds the FunctionDecl node.
@@ -253,7 +253,7 @@ const stepCallExpr = function (state, control) {
   if (step === 'F') {
     // The F step uses the evaluated type of the callee to set up the values of
     // its formal parameters in its scope.
-    const funcType = state.result;
+    const funcType = core.result;
     // The 'call' effect will open a function scope and store in it the return
     // continuation and the function call values.
     const cont = {...control, step: 'R'};
@@ -280,12 +280,12 @@ const stepCallExpr = function (state, control) {
     // accessible (as control.values).
     return {
       control: control.cont,
-      result: state.result
+      result: core.result
     };
   }
 };
 
-const stepImplicitCastExpr = function (state, control) {
+const stepImplicitCastExpr = function (core, control) {
   const {step, node} = control;
   if (step === 0) {
     // An implicit cast is transparent w.r.t. the value/lvalue mode.
@@ -297,16 +297,16 @@ const stepImplicitCastExpr = function (state, control) {
   if (step === 1) {
     // No expression boundary around the expression of an implicit cast.
     return {
-      control: enter(node[2][1], {...control, step: 2, value: state.result})
+      control: enter(node[2][1], {...control, step: 2, value: core.result})
     };
   }
   const value = control.value;
-  const type = state.result;
+  const type = core.result;
   const result = evalCast(type, value);
   return {control: control.cont, result};
 };
 
-const stepExplicitCastExpr = function (state, control) {
+const stepExplicitCastExpr = function (core, control) {
   const {step, node} = control;
   if (step === 0) {
     return {
@@ -315,18 +315,18 @@ const stepExplicitCastExpr = function (state, control) {
   }
   if (step === 1) {
     return {
-      control: enterExpr(node[2][1], {...control, step: 2, type: state.result})
+      control: enterExpr(node[2][1], {...control, step: 2, type: core.result})
     };
   }
   const type = control.type;
-  const value = state.result;
+  const value = core.result;
   const result = evalCast(type, value);
   return {control: control.cont, result};
 };
 
-const stepDeclRefExpr = function (state, control) {
+const stepDeclRefExpr = function (core, control) {
   const nameNode = control.node[2][0];
-  const ref = findDeclaration(state, nameNode[1].identifier);
+  const ref = findDeclaration(core, nameNode[1].identifier);
   const effects = [];
   let result;
   if (ref instanceof PointerValue) {
@@ -339,7 +339,7 @@ const stepDeclRefExpr = function (state, control) {
         // first element.
         result = new PointerValue(pointerType(varType.elem), ref.address);
       } else {
-        result = readValue(state.memory, ref);
+        result = readValue(core.memory, ref);
         effects.push(['load', ref]);
       }
     }
@@ -355,20 +355,20 @@ const stepDeclRefExpr = function (state, control) {
   return {control: control.cont, result, effects};
 };
 
-const stepUnaryOperator = function (state, control) {
+const stepUnaryOperator = function (core, control) {
   if (control.step === 0) {
     // Evaluate the operand.
     return {
       control: enterExpr(control.node[2][0], {...control, step: 1})
     };
   } else {
-    const value = state.result;
+    const value = core.result;
     const result = evalUnaryOperation(control.node[1].opcode, value);
     return {control: control.cont, result};
   }
 };
 
-const stepAssignmentUnaryOperator = function (state, control) {
+const stepAssignmentUnaryOperator = function (core, control) {
   if (control.step === 0) {
     // Evaluate the operand as a lvalue.
     return {
@@ -376,8 +376,8 @@ const stepAssignmentUnaryOperator = function (state, control) {
         control.node[2][0], {...control, step: 1}, {mode: 'lvalue'})
     };
   } else {
-    const lvalue = state.result;
-    const oldValue = readValue(state.memory, lvalue);
+    const lvalue = core.result;
+    const oldValue = readValue(core.memory, lvalue);
     const opcode = control.node[1].opcode;
     const binOp = /Inc$/.test(opcode) ? 'Add' : 'Sub';
     const newValue = evalBinaryOperation(binOp, oldValue, one);
@@ -393,7 +393,7 @@ const stepAssignmentUnaryOperator = function (state, control) {
   }
 };
 
-const stepAddrOf = function (state, control) {
+const stepAddrOf = function (core, control) {
   if (control.step === 0) {
     // Evaluate the operand as an lvalue.
     return {
@@ -402,39 +402,39 @@ const stepAddrOf = function (state, control) {
     };
   } else {
     // Pass the result.
-    const result = state.result;
+    const result = core.result;
     return {control: control.cont, result};
   }
 };
 
-const stepDeref = function (state, control) {
+const stepDeref = function (core, control) {
   if (control.step === 0) {
     return {
       control: enterExpr(control.node[2][0], {...control, step: 1})
     };
   } else {
     // Pass the result.
-    const lvalue = state.result;
+    const lvalue = core.result;
     if (control.mode === 'lvalue') {
       // As an lvalue (*a) reduces to a.
       return {control: control.cont, result: lvalue};
     }
     const effects = [['load', lvalue]];
-    const result = readValue(state.memory, lvalue);
+    const result = readValue(core.memory, lvalue);
     return {control: control.cont, result, effects};
   }
 };
 
-const stepUnaryExprOrTypeTraitExpr = function (state, control) {
+const stepUnaryExprOrTypeTraitExpr = function (core, control) {
   // In C, this node kind is always sizeof.
   // TODO: include the type of the expression in the AST, so we can
   //       simply call sizeOfType.
-  const size = sizeOfExpr(state, control.node[2][0]);
+  const size = sizeOfExpr(core, control.node[2][0]);
   const result = new IntegralValue(scalarTypes['int'], size);
   return {control: control.cont, result};
 };
 
-const stepBinaryOperator = function (state, control) {
+const stepBinaryOperator = function (core, control) {
   if (control.step === 0) {
     // Before LHS.
     return {
@@ -442,7 +442,7 @@ const stepBinaryOperator = function (state, control) {
     };
   } else if (control.step === 1) {
     // After LHS, before RHS.
-    const lhs = state.result;
+    const lhs = core.result;
     const opcode = control.node[1].opcode;
     // Short-circuit evaluation for logical operators.
     if ((opcode === 'LAnd' && !lhs.toBool()) || (opcode === 'LOr' && lhs.toBool())) {
@@ -453,7 +453,7 @@ const stepBinaryOperator = function (state, control) {
     };
   } else {
     // After RHS.
-    const rhs = state.result;
+    const rhs = core.result;
     const opcode = control.node[1].opcode;
     const result =
       /^(Comma|LOr|LAnd)$/.test(opcode) ? rhs : evalBinaryOperation(opcode, control.lhs, rhs);
@@ -461,7 +461,7 @@ const stepBinaryOperator = function (state, control) {
   }
 };
 
-const stepAssignmentOperator = function (state, control) {
+const stepAssignmentOperator = function (core, control) {
   if (control.step === 0) {
     // Before LHS (as lvalue).
     return {
@@ -470,20 +470,20 @@ const stepAssignmentOperator = function (state, control) {
     };
   } else if (control.step === 1) {
     // After LHS, before RHS.
-    const lvalue = state.result;
+    const lvalue = core.result;
     return {
       control: enterExpr(control.node[2][1], {...control, step: 2, lvalue})
     };
   } else {
     // After RHS.
     const lvalue = control.lvalue;
-    const {result} = state;
+    const {result} = core;
     const effects = [['store', lvalue, result]];
     return {control: control.cont, result, effects};
   }
 };
 
-const stepAssignmentBinaryOperator = function (state, control) {
+const stepAssignmentBinaryOperator = function (core, control) {
   if (control.step === 0) {
     // Before LHS (as lvalue).
     return {
@@ -492,8 +492,8 @@ const stepAssignmentBinaryOperator = function (state, control) {
     };
   } else if (control.step === 1) {
     // After LHS, before RHS.
-    const lvalue = state.result;
-    const lhs = readValue(state.memory, lvalue);
+    const lvalue = core.result;
+    const lhs = readValue(core.memory, lvalue);
     return {
       control: enterExpr(control.node[2][1], {...control, step: 2, lvalue, lhs}),
       effects: [['load', lvalue]]
@@ -501,7 +501,7 @@ const stepAssignmentBinaryOperator = function (state, control) {
   } else {
     // After RHS.
     const {lvalue, lhs} = control;
-    const rhs = state.result;
+    const rhs = core.result;
     const opcode = control.node[1].opcode.replace('Assign', '');
     const result = evalBinaryOperation(opcode, lhs, rhs);
     const effects = [['store', lvalue, result]];
@@ -509,7 +509,7 @@ const stepAssignmentBinaryOperator = function (state, control) {
   }
 };
 
-const stepArraySubscriptExpr = function (state, control) {
+const stepArraySubscriptExpr = function (core, control) {
   if (control.step === 0) {
     // Before array expr.
     return {
@@ -517,28 +517,28 @@ const stepArraySubscriptExpr = function (state, control) {
     };
   } else if (control.step === 1) {
     // After array expr, before subscript expr.
-    const array = state.result;
+    const array = core.result;
     return {
       control: enterExpr(control.node[2][1], {...control, step: 2, array})
     };
   } else {
     // After subscript expr.
     const array = control.array;
-    const subscript = state.result;
+    const subscript = core.result;
     const ref = evalPointerAdd(array, subscript);
     const effects = [];
     let result;
     if (control.mode === 'lvalue') {
       result = ref;
     } else {
-      result = readValue(state.memory, ref);
+      result = readValue(core.memory, ref);
       effects.push(['load', ref]);
     }
     return {control: control.cont, result, effects};
   }
 };
 
-const stepConditionalOperator = function (state, control) {
+const stepConditionalOperator = function (core, control) {
   const {node, step} = control;
   switch (step) {
   case 0:
@@ -546,18 +546,18 @@ const stepConditionalOperator = function (state, control) {
     return {control: enterExpr(node[2][0], {...control, step: 1})};
   case 1:
     // Evaluate the operand depending on the result's truthiness.
-    if (state.result.toBool()) {
+    if (core.result.toBool()) {
       return {control: enterStmt(node[2][1], {...control, step: 2})};
     } else {
       return {control: enterStmt(node[2][2], {...control, step: 2})};
     }
   case 2:
     // Pass the result upwards.
-    return {control: control.cont, result: state.result};
+    return {control: control.cont, result: core.result};
   }
 };
 
-const stepVarDecl = function (state, control) {
+const stepVarDecl = function (core, control) {
   // VarDecl children are [type, init?] (init is optional).
   const {step, node} = control;
   // The type is evaluated in case it contains expressions,
@@ -567,18 +567,18 @@ const stepVarDecl = function (state, control) {
   }
   // Evaluate the inializer, if present.
   if (step === 1 && node[2].length === 2) {
-    const type = state.result;
+    const type = core.result;
     return {control: enterExpr(node[2][1], {...control, step: 2, type})};
   }
   const {name} = control.node[1];
-  const type = step === 1 ? state.result : control.type;
-  const init = step === 2 ? state.result : null;
+  const type = step === 1 ? core.result : control.type;
+  const init = step === 2 ? core.result : null;
   // TODO: fix incomplete array type based on init value
   const effects = [['vardecl', name, type, init]];
   return {control: control.cont, result: null, effects};
 };
 
-const stepIntegerLiteral = function (state, control) {
+const stepIntegerLiteral = function (core, control) {
   const value = control.node[1].value;
   // XXX use different type if value ends with l, ll, ul, ull
   return {
@@ -587,7 +587,7 @@ const stepIntegerLiteral = function (state, control) {
   };
 };
 
-const stepCharacterLiteral = function (state, control) {
+const stepCharacterLiteral = function (core, control) {
   const value = control.node[1].value;
   // XXX use 'unsigned char' if value ends with 'u'
   return {
@@ -596,7 +596,7 @@ const stepCharacterLiteral = function (state, control) {
   };
 };
 
-const stepFloatingLiteral = function (state, control) {
+const stepFloatingLiteral = function (core, control) {
   const value = control.node[1].value;
   const type = /[fF]$/.test(value) ? scalarTypes['float'] : scalarTypes['double'];
   return {
@@ -605,62 +605,62 @@ const stepFloatingLiteral = function (state, control) {
   };
 };
 
-const stepStringLiteral = function (state, control) {
+const stepStringLiteral = function (core, control) {
   return {
     control: control.cont,
     result: control.node[1].ref
   };
 };
 
-const stepBuiltinType = function (state, control) {
+const stepBuiltinType = function (core, control) {
   const {name} = control.node[1];
   const result = scalarTypes[name];
   return {control: control.cont, result};
 };
 
-const stepPointerType = function (state, control) {
+const stepPointerType = function (core, control) {
   const {node, step} = control;
   if (step === 0) {
     return {control: enter(node[2][0], {...control, step: 1})};
   }
-  const result = pointerType(state.result);
+  const result = pointerType(core.result);
   return {control: control.cont, result};
 };
 
-const stepConstantArrayType = function (state, control) {
+const stepConstantArrayType = function (core, control) {
   const {node, step} = control;
   if (step === 0) {
     return {control: enter(node[2][0], {...control, step: 1})};
   }
   if (step === 1) {
-    const elemType = state.result;
+    const elemType = core.result;
     return {control: enter(node[2][1], {...control, step: 2, elemType})};
   }
   const {elemType} = control;
-  const elemCount = state.result;
+  const elemCount = core.result;
   const result = arrayType(elemType, elemCount);
   return {control: control.cont, result};
 };
 
-const stepIncompleteArrayType = function (state, control) {
+const stepIncompleteArrayType = function (core, control) {
   const {node, step} = control;
   if (step === 0) {
     return {control: enter(node[2][0], {...control, step: 1})};
   }
-  const elemType = state.result;
+  const elemType = core.result;
   const result = arrayType(elemType, undefined);
   return {control: control.cont, result};
 };
 
-const stepFunctionProtoType = function (state, control) {
+const stepFunctionProtoType = function (core, control) {
   const {node, step} = control;
   const cont = {...control, step: step + 1};
   if (step === 1) {
-    cont.result = state.result;
+    cont.result = core.result;
     cont.params = [];
   } else if (step > 1) {
     cont.params = control.params.slice();
-    cont.params.push(state.result);
+    cont.params.push(core.result);
   }
   if (step < node[2].length) {
     return {control: enter(node[2][step], cont)};
@@ -671,7 +671,7 @@ const stepFunctionProtoType = function (state, control) {
   };
 };
 
-const stepParmVarDecl = function (state, control) {
+const stepParmVarDecl = function (core, control) {
   const {node, step} = control;
   if (step === 0) {
     // Evaluate the type.
@@ -680,69 +680,69 @@ const stepParmVarDecl = function (state, control) {
     };
   }
   const name = node[1].name;
-  const type = state.result;
+  const type = core.result;
   return {control: control.cont, result: {name, type}};
 };
 
-const stepParenType = function (state, control) {
+const stepParenType = function (core, control) {
   const {node, step} = control;
   if (step === 0) {
     return {control: enter(node[2][0], {...control, step: 1})};
   } else {
-    return {control: control.cont, result: state.result};
+    return {control: control.cont, result: core.result};
   }
 };
 
-export const getStep = function (state, control) {
+export const getStep = function (core, control) {
   switch (control.node[0]) {
   case 'CompoundStmt':
-    return stepCompoundStmt(state, control);
+    return stepCompoundStmt(core, control);
   case 'DeclStmt':
-    return stepDeclStmt(state, control);
+    return stepDeclStmt(core, control);
   case 'ForStmt':
-    return stepForStmt(state, control);
+    return stepForStmt(core, control);
   case 'WhileStmt':
-    return stepWhileStmt(state, control);
+    return stepWhileStmt(core, control);
   case 'DoStmt':
-    return stepDoStmt(state, control);
+    return stepDoStmt(core, control);
   case 'BreakStmt':
-    return stepBreakStmt(state, control);
+    return stepBreakStmt(core, control);
   case 'ContinueStmt':
-    return stepContinueStmt(state, control);
+    return stepContinueStmt(core, control);
   case 'IfStmt':
-    return stepIfStmt(state, control);
+    return stepIfStmt(core, control);
   case 'ReturnStmt':
-    return stepReturnStmt(state, control);
+    return stepReturnStmt(core, control);
   case 'VarDecl':
-    return stepVarDecl(state, control);
+    return stepVarDecl(core, control);
   case 'ParenExpr':
-    return stepParenExpr(state, control);
+    return stepParenExpr(core, control);
   case 'CallExpr':
-    return stepCallExpr(state, control);
+    return stepCallExpr(core, control);
   case 'ImplicitCastExpr':
-    return stepImplicitCastExpr(state, control);
+    return stepImplicitCastExpr(core, control);
   case 'CStyleCastExpr':
-    return stepExplicitCastExpr(state, control);
+    return stepExplicitCastExpr(core, control);
   case 'DeclRefExpr':
-    return stepDeclRefExpr(state, control);
+    return stepDeclRefExpr(core, control);
   case 'IntegerLiteral':
-    return stepIntegerLiteral(state, control);
+    return stepIntegerLiteral(core, control);
   case 'CharacterLiteral':
-    return stepCharacterLiteral(state, control);
+    return stepCharacterLiteral(core, control);
   case 'FloatingLiteral':
-    return stepFloatingLiteral(state, control);
+    return stepFloatingLiteral(core, control);
   case 'StringLiteral':
-    return stepStringLiteral(state, control);
+    return stepStringLiteral(core, control);
   case 'UnaryOperator':
     switch (control.node[1].opcode) {
       case 'Plus': case 'Minus': case 'LNot': case 'Not':
-        return stepUnaryOperator(state, control);
+        return stepUnaryOperator(core, control);
       case 'PreInc': case 'PreDec': case 'PostInc': case 'PostDec':
-        return stepAssignmentUnaryOperator(state, control);
+        return stepAssignmentUnaryOperator(core, control);
       case 'AddrOf':
-        return stepAddrOf(state, control);
+        return stepAddrOf(core, control);
       case 'Deref':
-        return stepDeref(state, control);
+        return stepDeref(core, control);
       default:
         return {
           control,
@@ -751,34 +751,34 @@ export const getStep = function (state, control) {
     }
     break;
   case 'UnaryExprOrTypeTraitExpr':
-    return stepUnaryExprOrTypeTraitExpr(state, control);
+    return stepUnaryExprOrTypeTraitExpr(core, control);
   case 'BinaryOperator':
     if (control.node[1].opcode === 'Assign') {
-      return stepAssignmentOperator(state, control);
+      return stepAssignmentOperator(core, control);
     } else {
-      return stepBinaryOperator(state, control);
+      return stepBinaryOperator(core, control);
     }
   case 'CompoundAssignOperator':
-    return stepAssignmentBinaryOperator(state, control);
+    return stepAssignmentBinaryOperator(core, control);
   case 'ArraySubscriptExpr':
-    return stepArraySubscriptExpr(state, control);
+    return stepArraySubscriptExpr(core, control);
   case 'ConditionalOperator':
-    return stepConditionalOperator(state, control);
+    return stepConditionalOperator(core, control);
   case 'BuiltinType':
-    return stepBuiltinType(state, control);
+    return stepBuiltinType(core, control);
   case 'PointerType':
-    return stepPointerType(state, control);
+    return stepPointerType(core, control);
   case 'ConstantArrayType':
-    return stepConstantArrayType(state, control);
+    return stepConstantArrayType(core, control);
   case 'IncompleteArrayType':
-    return stepIncompleteArrayType(state, control);
+    return stepIncompleteArrayType(core, control);
   case 'FunctionProtoType':
   case 'FunctionNoProtoType':
-    return stepFunctionProtoType(state, control);
+    return stepFunctionProtoType(core, control);
   case 'ParmVarDecl':
-    return stepParmVarDecl(state, control);
+    return stepParmVarDecl(core, control);
   case 'ParenType':
-    return stepParenType(state, control);
+    return stepParenType(core, control);
   }
   return {
     control,
