@@ -65,7 +65,7 @@ IntegralValue.prototype.pack = function (view, offset, littleEndian) {
       view.setUint32(offset, this.number, littleEndian);
       break;
     default:
-      throw `cannot pack integral value ${this.type.repr}`;
+      throw new Error(`cannot pack integral value ${this.type.repr}`);
   }
 };
 
@@ -97,7 +97,7 @@ FloatingValue.prototype.pack = function (view, offset, littleEndian) {
       view.setFloat64(offset, this.number, littleEndian);
       break;
     default:
-      throw `cannot pack floating value ${this.type.repr}`;
+      throw new Error(`cannot pack floating value ${this.type.repr}`);
   }
 };
 
@@ -169,7 +169,7 @@ export const unpackValue = function (view, offset, type, littleEndian) {
         case 'double':
           return new FloatingValue(type, view.getFloat64(offset, littleEndian));
         default:
-          throw `unpack scalar ${type.repr}`;
+          throw new Error(`unpack scalar ${type.repr}`);
       }
     case 'array':
       {
@@ -184,7 +184,7 @@ export const unpackValue = function (view, offset, type, littleEndian) {
     case 'pointer':
       return new PointerValue(type, view.getUint32(offset, littleEndian));
     default:
-      throw `not implemented: unpack ${type.kind}`;
+      throw new Error(`not implemented: unpack ${type.kind}`);
   }
 };
 
@@ -280,7 +280,7 @@ export const evalBinaryOperation = function (opcode, lhs, rhs) {
       return new IntegralValue(scalarTypes['int'], offset);
     }
   }
-  throw `not implemented: ${lhs} ${opcode} ${rhs}`;
+  throw new Error(`not implemented: ${lhs} ${opcode} ${rhs}`);
 };
 
 export const evalUnaryOperation = function (opcode, operand) {
@@ -298,7 +298,7 @@ export const evalUnaryOperation = function (opcode, operand) {
       case 'Minus': return new FloatingValue(operand.type, -operand.number);
     }
   }
-  throw `not implemented: ${opcode} ${operand}`;
+  throw new Error(`not implemented: ${opcode} ${operand}`);
 };
 
 export const evalCast = function (type, operand) {
@@ -335,7 +335,7 @@ export const evalCast = function (type, operand) {
       return operand;
     }
   }
-  throw `not implemented: (${type})${operand}`;
+  throw new Error(`not implemented: (${type})${operand}`);
 };
 
 export const evalPointerAdd = function (pointer, value) {
