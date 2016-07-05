@@ -16,7 +16,7 @@ with the seq property set to true.  In C, sequence points occur:
 import {
   scalarTypes, pointerType, functionType, arrayType, pointerSize} from './type';
 import {
-  IntegralValue, FloatingValue, PointerValue, BuiltinValue, FunctionValue,
+  IntegralValue, FloatingValue, PointerValue, BuiltinValue, FunctionValue, ArrayValue,
   evalUnaryOperation, evalBinaryOperation, evalCast, evalPointerAdd} from './value';
 import {findLocalDeclaration} from './scope';
 import {writeValue, readValue} from './memory';
@@ -25,27 +25,6 @@ const one = new IntegralValue(scalarTypes['int'], 1);
 
 const findDeclaration = function (core, name) {
   return findLocalDeclaration(core.scope, name) || core.globalMap[name];
-};
-
-const sizeOfExpr = function (core, node) {
-  switch (node[0]) {
-    case 'ParenExpr':
-      return sizeOfExpr(core, node[2][0]);
-    case 'DeclRefExpr':
-      {
-        const nameNode = node[2][0];
-        const ref = findDeclaration(core, nameNode[1].identifier);
-        if (ref.type instanceof PointerValue) {
-          return ref.type.pointee.size;
-        } else {
-          return 1;  // give non-addressable values a size of 1
-        }
-      }
-    case 'AddrOf':
-      return pointerSize;
-    default:
-      throw new Error(`sizeof ${node[0]} not implemented`);
-  }
 };
 
 const enter = function (node, cont, attrs) {
@@ -99,7 +78,7 @@ const stepDeclStmt = function (core, control) {
 
 const stepParenExpr = function (core, control) {
   if (control.step === 0) {
-    // ParenExpr is transparent w.r.t. the evaluation mode (value/lvalue).
+    // ParenExpr is transparent w.r.t. the evaluation mode (value/lvalue/type).
     return {
       control: enter(
         control.node[2][0], {...control, step: 1}, {mode: control.mode})
@@ -286,32 +265,41 @@ const stepCallExpr = function (core, control) {
 };
 
 const stepImplicitCastExpr = function (core, control) {
+  // An implicit cast (T)e has children [e, T] (reverse of explicit cast).
+  // T is evaluated first (in normal mode) so that in evaluation of e can be
+  // skipped if we are in type mode.
   const {node, step} = control;
   if (step === 0) {
+    return {
+      control: enter(node[2][1], {...control, step: 1})
+    };
+  }
+  if (control.mode === 'type') {
+    return {control: control.cont, result: core.result};
+  }
+  if (step === 1) {
     // An implicit cast is transparent w.r.t. the value/lvalue mode.
     // XXX Does it really happen?
     return {
-      control: enter(node[2][0], {...control, step: 1}, {mode: control.mode})
+      control: enter(node[2][0], {...control, step: 2, type: core.result}, {mode: control.mode})
     };
   }
-  if (step === 1) {
-    // No expression boundary around the expression of an implicit cast.
-    return {
-      control: enter(node[2][1], {...control, step: 2, value: core.result})
-    };
-  }
-  const value = control.value;
-  const type = core.result;
+  const type = control.type;
+  const value = core.result;
   const result = evalCast(type, value);
   return {control: control.cont, result};
 };
 
 const stepExplicitCastExpr = function (core, control) {
+  // An explicit cast (T)e has children [T, e] (reverse of implicit cast).
   const {node, step} = control;
   if (step === 0) {
     return {
       control: enter(node[2][0], {...control, step: 1})
     };
+  }
+  if (control.mode === 'type') {
+    return {control: control.cont, result: core.result};
   }
   if (step === 1) {
     return {
@@ -330,7 +318,13 @@ const stepDeclRefExpr = function (core, control) {
   const effects = [];
   let result;
   if (ref instanceof PointerValue) {
-    if (control.mode === 'lvalue') {
+    if (control.mode === 'type') {
+      if (ref.type.kind === 'pointer') {
+        result = ref.type.pointee;
+      } else {
+        result = ref.type;
+      }
+    } else if (control.mode === 'lvalue') {
       result = ref;
     } else {
       const varType = ref.type.pointee;
@@ -395,31 +389,45 @@ const stepAssignmentUnaryOperator = function (core, control) {
 
 const stepAddrOf = function (core, control) {
   if (control.step === 0) {
-    // Evaluate the operand as an lvalue.
+    // If in 'type' mode, evaluate operand in type mode.
+    // Otherwise, switch to 'lvalue' mode.
+    const mode = control.mode === 'type' ? 'type' : 'lvalue';
     return {
       control: enterExpr(
-        control.node[2][0], {...control, step: 1}, {mode: 'lvalue'})
+        control.node[2][0], {...control, step: 1}, {mode})
     };
   } else {
-    // Pass the result.
-    const result = core.result;
+    // If in 'type' mode, return a pointer-to-operand's type type.
+    // Otherwise, the lvalue-result (a pointer value) is returned.
+    let result = core.result;
+    if (control.mode === 'type') {
+      result = pointerType(result);
+    }
     return {control: control.cont, result};
   }
 };
 
 const stepDeref = function (core, control) {
   if (control.step === 0) {
+    // Transition out of 'lvalue' mode.
+    const mode = control.mode === 'lvalue' ? undefined : control.mode;
     return {
-      control: enterExpr(control.node[2][0], {...control, step: 1})
+      control: enterExpr(control.node[2][0], {...control, step: 1}, {mode})
     };
   } else {
     // Pass the result.
-    const lvalue = core.result;
-    if (control.mode === 'lvalue') {
-      // As an lvalue (*a) reduces to a.
-      return {control: control.cont, result: lvalue};
+    if (control.mode === 'type') {
+      // In type-mode (*a) evaluates to T if a has type T*.
+      return {control: control.cont, result: core.result.pointee};
     }
+    if (control.mode === 'lvalue') {
+      // Dereferencing was performed by evaluating the operand in value mode.
+      return {control: control.cont, result: core.result};
+    }
+    // Normal value-mode path.
+    const lvalue = core.result;
     const effects = [['load', lvalue]];
+    // XXX special case if lvalue.type.pointee.kind === 'array'?
     const result = readValue(core.memory, lvalue);
     return {control: control.cont, result, effects};
   }
@@ -429,8 +437,14 @@ const stepUnaryExprOrTypeTraitExpr = function (core, control) {
   // In C, this node kind is always sizeof.
   // TODO: include the type of the expression in the AST, so we can
   //       simply call sizeOfType.
-  const size = sizeOfExpr(core, control.node[2][0]);
-  const result = new IntegralValue(scalarTypes['int'], size);
+  if (control.step === 0) {
+    // Evaluate the operand in 'type' mode.
+    return {
+      control: enterExpr(control.node[2][0], {...control, step: 1}, {mode: 'type'})
+    };
+  }
+  const type = core.result;
+  const result = new IntegralValue(scalarTypes['int'], type.size);
   return {control: control.cont, result};
 };
 
@@ -528,7 +542,7 @@ const stepArraySubscriptExpr = function (core, control) {
     const ref = evalPointerAdd(array, subscript);
     const effects = [];
     let result;
-    if (control.mode === 'lvalue') {
+    if (control.mode === 'lvalue' || ref.type.pointee.kind === 'array') {
       result = ref;
     } else {
       result = readValue(core.memory, ref);
@@ -628,16 +642,27 @@ const stepPointerType = function (core, control) {
 };
 
 const stepConstantArrayType = function (core, control) {
+  // A ConstantArrayType may have its size as a second child expression
+  // or as a 'size' attribute.
   const {node, step} = control;
   if (step === 0) {
+    // Evaluate the type expression.
     return {control: enter(node[2][0], {...control, step: 1})};
   }
-  if (step === 1) {
-    const elemType = core.result;
-    return {control: enter(node[2][1], {...control, step: 2, elemType})};
+  let elemType, elemCount;
+  if (node[2].length === 2) {
+    if (step === 1) {
+      // Evaluate the size expression.
+      elemType = core.result;
+      return {control: enter(node[2][1], {...control, step: 2, elemType})};
+    } else {
+      elemType = control.elemType;
+      elemCount = core.result;
+    }
+  } else {
+    elemType = core.result;
+    elemCount = new IntegralValue(scalarTypes['unsigned int'], parseInt(node[1].size));
   }
-  const {elemType} = control;
-  const elemCount = core.result;
   const result = arrayType(elemType, elemCount);
   return {control: control.cont, result};
 };
