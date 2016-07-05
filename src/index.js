@@ -17,16 +17,8 @@ export {findClosestFunctionScope} from './scope';
 export {defaultEffects} from './effects';
 
 export const start = function (context) {
-  const {decls, builtins} = context;
-
-  // Initialize the memory, control, and scope data structures.
-  const limit = 0x10000;
-  let memory = allocate(limit);
-  let heapStart = 0x100;
-  const writeLog = Immutable.List();
-  const globalMap = {};
-  let scope = {key: 0, limit: limit};
-  const core = {globalMap, writeLog, scope};
+  const {decls, builtins, options} = context;
+  const core = initCore(0x10000);
 
   // Built the map of global variables.
   // const intFunc = functionType(scalarTypes['int'], []);
@@ -36,9 +28,9 @@ export const start = function (context) {
     forEachNode(declNode, function (node) {
       if (node[0] === 'StringLiteral') {
         const value = stringValue(node[1].value);
-        const ref = new PointerValue(value.type, heapStart);
-        memory = writeValue(memory, ref, value);
-        heapStart += value.type.size;
+        const ref = new PointerValue(value.type, core.heapStart);
+        core.memory = writeValue(core.memory, ref, value);
+        core.heapStart += value.type.size;
         node[1].ref = ref;
       }
     });
@@ -47,29 +39,30 @@ export const start = function (context) {
     // TODO: evaluate the types and init values
     switch (declNode[0]) {
       case 'VarDecl': {
+        const name = declNode[1].name;
         const typeNode = declNode[2][0];
+        const type = stepThroughNode(core, typeNode, options);
+        const address = core.heapStart;
+        core.heapStart += type.size;  // XXX add alignment padding
+        const ref = new PointerValue(pointerType(type), address);
         const initNode = declNode[2][1];
-        // const typeVal = evalExpr(state, typeNode);
-        // XXX allocate memory and create a pointer
-        // XXX if the initNode is an InitListExpr, store the pointer (and
-        //     0-initialized index) in the control structure while evaluating
-        //     the node.
+        const init = initNode && stepThroughNode(core, initNode, options);
+        // TODO: duplicate code from vardecl effect ☹
+        core.memory = writeValue(core.memory, ref, init);
+        core.globalMap[name] = ref;
         break;
       }
       case 'FunctionDecl': {
         const name = declNode[2][0][1].identifier;
         if (builtins && name in builtins) {
-          globalMap[name] = new BuiltinValue(name, builtins[name]);
+          core.globalMap[name] = new BuiltinValue(name, builtins[name]);
         } else {
-          globalMap[name] = new FunctionValue(declNode);
+          core.globalMap[name] = new FunctionValue(declNode);
         }
         break;
       }
     }
   });
-
-  core.memory = memory;
-  core.heapStart = heapStart;
 
   // TODO: pass argc, argv to 'main'
   core.control = {
@@ -81,10 +74,19 @@ export const start = function (context) {
     cont: null
   };
 
-  return core;
+  return {core, options};
 };
 
-export const applyStep = function (state, step, options) {
+const initCore = function (memorySize) {
+  const globalMap = {};
+  const writeLog = Immutable.List();
+  const scope = {key: 0, limit: memorySize};
+  const memory = allocate(memorySize);
+  const heapStart = 0x100;
+  return {globalMap, writeLog, scope, memory, heapStart};
+};
+
+export const applyStep = function (state, step) {
   // Make fresh objects that can be imperatively updated during the step.
   const newCore = {...state.core};
   const newState = {...state, core: newCore};
@@ -109,7 +111,7 @@ export const applyStep = function (state, step, options) {
   }
   // Perform the side-effects.
   effects.forEach(function (effect) {
-    applyEffect(newState, effect, options);
+    applyEffect(newState, effect);
   });
   return newState;
 };
@@ -118,7 +120,7 @@ export const clearMemoryLog = function (core) {
   return {...core, memoryLog: Immutable.List(), oldMemory: core.memory};
 };
 
-export const step = function (state, options) {
+export const step = function (state) {
   // Performs a single step.
   if (!state.core.control) {
     // Program is halted.
@@ -130,7 +132,19 @@ export const step = function (state, options) {
     return {...state, error: step.error};
   }
   // Apply the effects.
-  return applyStep(state, step, options);
+  return applyStep(state, step);
+};
+
+const stepThroughNode = function (core, node, options) {
+  let state = {core: {...core, control: {node, step: 0}}, options};
+  while (state.core.control) {
+    const step = getStep(state.core);
+    if ('error' in step) {
+      throw new Error(step.error);
+    }
+    state = applyStep(state, step);
+  }
+  return state.core.result;
 };
 
 const forEachNode = function (node, callback) {
