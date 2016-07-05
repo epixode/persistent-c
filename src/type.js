@@ -62,3 +62,20 @@ export const lubType = function (t1, t2) {
   // probably actually always used with t1 == t2.
   return t1;
 };
+
+export const arraySize = function (val) {
+  const result = [];
+  while (Array.isArray(val)) {
+    result.push(val.length);
+    val = val[0];
+  }
+  return result;
+};
+
+export const arrayGroundType = function (type) {
+  if (type.kind === 'array') {
+    return arrayGroundType(type.elem);
+  } else {
+    return type;
+  }
+};
