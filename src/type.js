@@ -7,7 +7,8 @@ export const Type = function (kind, size) {
 }
 
 export const functionType = function (resultType, paramDecls) {
-  const type = new Type('function', pointerSize);
+  // Functions have size 1 by convention.
+  const type = new Type('function', 1);
   type.result = resultType;
   type.params = paramDecls;  // [{name,type}]
   type.toString = function () {
