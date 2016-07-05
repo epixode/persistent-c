@@ -1,6 +1,6 @@
 
 import {writeValue} from './memory';
-import {scalarTypes, pointerType, arrayType, arraySize, arrayGroundType} from './type';
+import {scalarTypes, pointerType, arrayType} from './type';
 import {IntegralValue, PointerValue, ArrayValue, zeroAtType} from './value';
 import {findClosestBlockScope, findClosestFunctionScope} from './scope';
 
@@ -91,18 +91,8 @@ const applyVardeclEffect = function (state, effect) {
   const {core} = state;
   const parentScope = core.scope;
   const name = effect[1];
-  let type = effect[2];
-  let init = effect[3];
-  if (init && type.kind === 'array') {
-    // Special considerations for array types:
-    // - the initialization list is a (javascript array of)+ values;
-    // - an incomplete array type has an undefined element count, which is
-    //   filled in using the length of the initialization list.
-    const dims = arraySize(init);
-    type = resolveArraySize(type, dims, 0);
-    const nullElem = zeroAtType(arrayGroundType(type));
-    init = buildArrayInitValue(type, init, nullElem);
-  }
+  const type = effect[2];
+  const init = effect[3];
   const address = parentScope.limit - type.size;
   const ref = new PointerValue(pointerType(type), address);
   core.scope = {
@@ -115,27 +105,6 @@ const applyVardeclEffect = function (state, effect) {
   if (init) {
     applyStoreEffect(state, ['store', ref, init]);
   }
-};
-
-const resolveArraySize = function (type, dims, rank) {
-  if (rank === dims.length) {
-    return type;
-  }
-  const elemType = resolveArraySize(type.elem, dims, rank + 1);
-  const elemCount = new IntegralValue(scalarTypes['unsigned int'], type.count || dims[rank]);
-  return arrayType(elemType, elemCount);
-};
-
-const buildArrayInitValue = function (type, init, nullElem) {
-  if (type.kind !== 'array') {
-    return init || nullElem;
-  }
-  const elements = [];
-  const elemCount = type.count.toInteger();
-  for (let i = 0; i < elemCount; i += 1) {
-    elements.push(buildArrayInitValue(type.elem, init && init[i], nullElem));
-  }
-  return new ArrayValue(type, elements);
 };
 
 export const defaultEffects = {

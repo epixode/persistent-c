@@ -6,6 +6,7 @@ import {PointerValue, stringValue, BuiltinValue, FunctionValue} from './value';
 import {allocate, readValue, writeValue, readString} from './memory';
 import {getStep} from './step';
 import {applyEffect} from './effects';
+import {finalizeVarDecl} from './decl';
 
 export {pointerType, scalarTypes} from './type';
 export {
@@ -40,14 +41,16 @@ export const start = function (context) {
     switch (declNode[0]) {
       case 'VarDecl': {
         const name = declNode[1].name;
+        // Evaluate type and initializer.
         const typeNode = declNode[2][0];
-        const type = stepThroughNode(core, typeNode, options);
+        const preType = stepThroughNode(core, typeNode, options);
+        const initNode = declNode[2][1];
+        const preInit = initNode && stepThroughNode(core, initNode, options);
+        const {type, init} = finalizeVarDecl(preType, preInit);
+        // Allocate and initialize memory.
         const address = core.heapStart;
         core.heapStart += type.size;  // XXX add alignment padding
         const ref = new PointerValue(pointerType(type), address);
-        const initNode = declNode[2][1];
-        const init = initNode && stepThroughNode(core, initNode, options);
-        // TODO: duplicate code from vardecl effect ☹
         core.memory = writeValue(core.memory, ref, init);
         core.globalMap[name] = ref;
         break;

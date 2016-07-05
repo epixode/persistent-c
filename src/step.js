@@ -20,6 +20,7 @@ import {
   evalUnaryOperation, evalBinaryOperation, evalCast, evalPointerAdd} from './value';
 import {findLocalDeclaration} from './scope';
 import {writeValue, readValue} from './memory';
+import {finalizeVarDecl} from './decl';
 
 const one = new IntegralValue(scalarTypes['int'], 1);
 
@@ -599,15 +600,15 @@ const stepVarDecl = function (core, control) {
   if (step === 0) {
     return {control: enter(node[2][0], {...control, step: 1})};
   }
-  // Evaluate the inializer, if present.
+  // Evaluate the initializer, if present.
   if (step === 1 && node[2].length === 2) {
     const type = core.result;
     return {control: enterExpr(node[2][1], {...control, step: 2, type})};
   }
   const {name} = control.node[1];
-  const type = step === 1 ? core.result : control.type;
-  const init = step === 2 ? core.result : null;
-  // TODO: fix incomplete array type based on init value
+  const preType = step === 1 ? core.result : control.type;
+  const preInit = step === 2 ? core.result : null;
+  const {type, init} = finalizeVarDecl(preType, preInit);
   const effects = [['vardecl', name, type, init]];
   return {control: control.cont, result: null, effects};
 };
