@@ -312,6 +312,10 @@ export const evalCast = function (type, operand) {
     if (/^(unsigned )?(int|long)$/.test(type.repr)) {
       return new IntegralValue(type, operand.toInteger() & 0xffffffff);
     }
+    if (/^(unsigned )?long long$/.test(type.repr)) {
+      // XXX this only works up to 2^53, use npm:long
+      return new IntegralValue(type, operand.toInteger());
+    }
     if (type.repr === 'float') {
       if (operand instanceof FloatingValue || operand instanceof IntegralValue) {
         return new FloatingValue(type, operand.number)
