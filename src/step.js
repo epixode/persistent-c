@@ -552,6 +552,26 @@ const stepArraySubscriptExpr = function (core, control) {
   }
 };
 
+const stepInitListExpr = function (core, control) {
+  const {node, step} = control;
+  let elements;
+  if (step === 0) {
+    elements = [];
+  } else {
+    elements = control.elements.slice();
+    elements.push(core.result);
+  }
+  if (step < node[2].length) {
+    return {
+      control: enterExpr(node[2][step], {...control, step: step + 1, elements})
+    };
+  }
+  return {
+    control: control.cont,
+    result: elements
+  };
+};
+
 const stepConditionalOperator = function (core, control) {
   const {node, step} = control;
   switch (step) {
@@ -788,6 +808,8 @@ export const getStep = function (core) {
     return stepAssignmentBinaryOperator(core, control);
   case 'ArraySubscriptExpr':
     return stepArraySubscriptExpr(core, control);
+  case 'InitListExpr':
+    return stepInitListExpr(core, control);
   case 'ConditionalOperator':
     return stepConditionalOperator(core, control);
   case 'BuiltinType':

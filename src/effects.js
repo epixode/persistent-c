@@ -1,7 +1,7 @@
 
 import {writeValue} from './memory';
-import {scalarTypes, pointerType} from './type';
-import {IntegralValue, PointerValue} from './value';
+import {scalarTypes, pointerType, arrayType, arraySize, arrayGroundType} from './type';
+import {IntegralValue, PointerValue, ArrayValue, zeroAtType} from './value';
 import {findClosestBlockScope, findClosestFunctionScope} from './scope';
 
 const applyLoadEffect = function (state, effect) {
@@ -91,8 +91,18 @@ const applyVardeclEffect = function (state, effect) {
   const {core} = state;
   const parentScope = core.scope;
   const name = effect[1];
-  const type = effect[2];
-  const init = effect[3];
+  let type = effect[2];
+  let init = effect[3];
+  if (init && type.kind === 'array') {
+    // Special considerations for array types:
+    // - the initialization list is a (javascript array of)+ values;
+    // - an incomplete array type has an undefined element count, which is
+    //   filled in using the length of the initialization list.
+    const dims = arraySize(init);
+    type = resolveArraySize(type, dims, 0);
+    const nullElem = zeroAtType(arrayGroundType(type));
+    init = buildArrayInitValue(type, init, nullElem);
+  }
   const address = parentScope.limit - type.size;
   const ref = new PointerValue(pointerType(type), address);
   core.scope = {
@@ -107,6 +117,27 @@ const applyVardeclEffect = function (state, effect) {
   }
 };
 
+const resolveArraySize = function (type, dims, rank) {
+  if (rank === dims.length) {
+    return type;
+  }
+  const elemType = resolveArraySize(type.elem, dims, rank + 1);
+  const elemCount = new IntegralValue(scalarTypes['unsigned int'], type.count || dims[rank]);
+  return arrayType(elemType, elemCount);
+};
+
+const buildArrayInitValue = function (type, init, nullElem) {
+  if (type.kind !== 'array') {
+    return init || nullElem;
+  }
+  const elements = [];
+  const elemCount = type.count.toInteger();
+  for (let i = 0; i < elemCount; i += 1) {
+    elements.push(buildArrayInitValue(type.elem, init && init[i], nullElem));
+  }
+  return new ArrayValue(type, elements);
+};
+
 export const defaultEffects = {
   load: applyLoadEffect,
   store: applyStoreEffect,
@@ -117,9 +148,10 @@ export const defaultEffects = {
   vardecl: applyVardeclEffect
 };
 
-// applyEffect applies an effect by shallowly mutating the passed state.
-export const applyEffect = function (state, effect, options) {
-  const {effectHandlers} = options;
+// applyEffect applies an effect by shallowly mutating the passed state
+// (both state and state.core are mutated).
+export const applyEffect = function (state, effect) {
+  const {effectHandlers} = state.options;
   const handler = effectHandlers[effect[0]];
   if (typeof handler === 'function') {
     return handler(state, effect);
