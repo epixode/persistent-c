@@ -342,3 +342,28 @@ export const evalPointerAdd = function (pointer, value) {
   const offset = value.toInteger() * pointer.type.pointee.size;
   return new PointerValue(pointer.type, pointer.address + offset);
 };
+
+export const zeroAtType = function (type) {
+  if (type.kind === 'pointer') {
+    return new PointerValue(type, 0);
+  }
+  if (type.kind === 'scalar') {
+    switch (type.repr) {
+      case 'char':
+      case 'unsigned char':
+      case 'short':
+      case 'unsigned short':
+      case 'int':
+      case 'unsigned int':
+      case 'long':
+      case 'unsigned long':
+      case 'long long':
+      case 'unsigned long long':
+        return new IntegralValue(type, 0);
+      case 'float':
+      case 'double':
+        return new FloatingValue(type, 0);
+    }
+  }
+  throw new Error(`undefined zero at type ${type.kind}`);
+};
