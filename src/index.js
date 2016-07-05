@@ -37,7 +37,6 @@ export const start = function (context) {
     });
 
     // Add the declaration to the global map.
-    // TODO: evaluate the types and init values
     switch (declNode[0]) {
       case 'VarDecl': {
         const name = declNode[1].name;
