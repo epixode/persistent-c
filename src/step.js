@@ -663,27 +663,31 @@ const stepPointerType = function (core, control) {
 };
 
 const stepConstantArrayType = function (core, control) {
-  // A ConstantArrayType may have its size as a second child expression
-  // or as a 'size' attribute.
+  // A ConstantArrayType has a 'size' attribute and a single type child.
   const {node, step} = control;
   if (step === 0) {
     // Evaluate the type expression.
     return {control: enter(node[2][0], {...control, step: 1})};
   }
-  let elemType, elemCount;
-  if (node[2].length === 2) {
-    if (step === 1) {
-      // Evaluate the size expression.
-      elemType = core.result;
-      return {control: enter(node[2][1], {...control, step: 2, elemType})};
-    } else {
-      elemType = control.elemType;
-      elemCount = core.result;
-    }
-  } else {
-    elemType = core.result;
-    elemCount = new IntegralValue(scalarTypes['unsigned int'], parseInt(node[1].size));
+  const elemType = core.result;
+  const elemCount = new IntegralValue(scalarTypes['unsigned int'], parseInt(node[1].size));
+  const result = arrayType(elemType, elemCount);
+  return {control: control.cont, result};
+};
+
+const stepVariableArrayType = function (core, control) {
+  const {node, step} = control;
+  if (step === 0) {
+    // Evaluate the type expression.
+    return {control: enter(node[2][0], {...control, step: 1})};
   }
+  if (step === 1) {
+    // Evaluate the size expression.
+    const elemType = core.result;
+    return {control: enter(node[2][1], {...control, step: 2, elemType})};
+  }
+  const {elemType} = control;
+  const elemCount = core.result;
   const result = arrayType(elemType, elemCount);
   return {control: control.cont, result};
 };
@@ -819,6 +823,8 @@ export const getStep = function (core) {
     return stepPointerType(core, control);
   case 'ConstantArrayType':
     return stepConstantArrayType(core, control);
+  case 'VariableArrayType':
+    return stepVariableArrayType(core, control);
   case 'IncompleteArrayType':
     return stepIncompleteArrayType(core, control);
   case 'FunctionProtoType':
