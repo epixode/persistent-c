@@ -81,11 +81,10 @@ export const start = function (context) {
 
 const initCore = function (memorySize) {
   const globalMap = {};
-  const writeLog = Immutable.List();
   const scope = {key: 0, limit: memorySize};
   const memory = allocate(memorySize);
   const heapStart = 0x100;
-  return {globalMap, writeLog, scope, memory, heapStart};
+  return {globalMap, scope, memory, heapStart};
 };
 
 export const applyStep = function (state, step) {
@@ -159,38 +158,6 @@ const forEachNode = function (node, callback) {
       }
     });
   }
-};
-
-const refsIntersect = function (ref1, ref2) {
-  const base1 = ref1.address, limit1 = base1 + ref1.type.pointee.size - 1;
-  const base2 = ref2.address, limit2 = base2 + ref2.type.pointee.size - 1;
-  const result = (base1 <= base2) ? (base2 <= limit1) : (base1 <= limit2);
-  return result;
-};
-
-export const inspectPointer = function (pointer, state) {
-  const {memoryLog, memory, oldMemory} = state;
-  const result = {type: pointer.type.pointee};
-  try {
-    result.value = readValue(memory, pointer);
-    memoryLog.forEach(function (entry, i) {
-      if (refsIntersect(pointer, entry[1])) {
-        if (entry[0] === 'load') {
-          if (result.load === undefined) {
-            result.load = i;
-          }
-        } else if (entry[0] === 'store') {
-          if (result.store === undefined) {
-            result.store = i;
-            result.prevValue = readValue(oldMemory, pointer);
-          }
-        }
-      }
-    });
-  } catch (err) {
-    result.error = err.toString();
-  }
-  return result;
 };
 
 export const outOfCurrentStmt = function (core) {
