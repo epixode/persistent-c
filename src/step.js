@@ -14,7 +14,7 @@ with the seq property set to true.  In C, sequence points occur:
 */
 
 import {
-  scalarTypes, pointerType, functionType, arrayType, pointerSize} from './type';
+  scalarTypes, pointerType, functionType, arrayType, decayedType} from './type';
 import {
   IntegralValue, FloatingValue, PointerValue, BuiltinValue, FunctionValue, ArrayValue,
   evalUnaryOperation, evalBinaryOperation, evalCast, evalPointerAdd} from './value';
@@ -332,7 +332,7 @@ const stepDeclRefExpr = function (core, control) {
       if (varType.kind === 'array') {
         // A reference to an array evaluates to a pointer to the array's
         // first element.
-        result = new PointerValue(pointerType(varType.elem), ref.address);
+        result = new PointerValue(decayedType(varType), ref.address);
       } else {
         result = readValue(core.memory, ref);
         effects.push(['load', ref]);
@@ -743,6 +743,15 @@ const stepParenType = function (core, control) {
   }
 };
 
+const stepDecayedType = function (core, control) {
+  const {node, step} = control;
+  if (step === 0) {
+    return {control: enter(node[2][0], {...control, step: 1})};
+  } else {
+    return {control: control.cont, result: decayedType(core.result)};
+  }
+};
+
 export const getStep = function (core) {
   const {control} = core;
   switch (control.node[0]) {
@@ -834,6 +843,8 @@ export const getStep = function (core) {
     return stepParmVarDecl(core, control);
   case 'ParenType':
     return stepParenType(core, control);
+  case 'DecayedType':
+    return stepDecayedType(core, control);
   }
   return {
     control,

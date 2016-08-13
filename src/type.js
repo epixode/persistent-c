@@ -27,6 +27,19 @@ export const arrayType = function (elemType, elemCount) {
   return type;
 };
 
+export const decayedType = function (origType) {
+  const type = new Type('pointer', pointerSize);
+  type.orig = origType;
+  if (origType.kind === 'array') {
+    // Decayed array type.
+    type.pointee = origType.elem;
+  } else {
+    // Decayed function type.
+    type.pointee = origType;
+  }
+  return type;
+};
+
 export const scalarTypes = {};
 const addScalarType = function (repr, size) {
   const type = new Type('scalar', size);
