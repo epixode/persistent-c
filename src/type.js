@@ -11,19 +11,12 @@ export const functionType = function (resultType, paramDecls) {
   const type = new Type('function', 1);
   type.result = resultType;
   type.params = paramDecls;  // [{name,type}]
-  type.toString = function () {
-    const paramStrs = this.params.map(d => `${d.type} ${d.name}`);
-    return `${this.result}(*)(${paramStrs.join(', ')})`;
-  };
   return type;
 };
 
 export const pointerType = function (pointeeType) {
   const type = new Type('pointer', pointerSize);
   type.pointee = pointeeType;
-  type.toString = function () {
-    return `(${this.pointee})*`;
-  };
   return type;
 };
 
@@ -31,9 +24,6 @@ export const arrayType = function (elemType, elemCount) {
   const type = new Type('array', elemCount && elemType.size * elemCount.toInteger());
   type.elem = elemType;
   type.count = elemCount;
-  type.toString = function () {
-    return `(${this.elem})[${this.count}]`;
-  };
   return type;
 };
 
@@ -41,7 +31,6 @@ export const scalarTypes = {};
 const addScalarType = function (repr, size) {
   const type = new Type('scalar', size);
   type.repr = repr;
-  type.toString = function () { return this.repr; }
   scalarTypes[repr] = type;
 };
 addScalarType('char', 1);
