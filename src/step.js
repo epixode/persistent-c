@@ -582,9 +582,9 @@ const stepConditionalOperator = function (core, control) {
   case 1:
     // Evaluate the operand depending on the result's truthiness.
     if (core.result.toBool()) {
-      return {control: enterStmt(node[2][1], {...control, step: 2})};
+      return {control: enterExpr(node[2][1], {...control, step: 2})};
     } else {
-      return {control: enterStmt(node[2][2], {...control, step: 2})};
+      return {control: enterExpr(node[2][2], {...control, step: 2})};
     }
   case 2:
     // Pass the result upwards.
