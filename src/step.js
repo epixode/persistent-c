@@ -267,7 +267,7 @@ const stepCallExpr = function (core, control) {
 
 const stepImplicitCastExpr = function (core, control) {
   // An implicit cast (T)e has children [e, T] (reverse of explicit cast).
-  // T is evaluated first (in normal mode) so that in evaluation of e can be
+  // T is evaluated first (in normal mode) so that the evaluation of e can be
   // skipped if we are in type mode.
   const {node, step} = control;
   if (step === 0) {
