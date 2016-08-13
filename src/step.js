@@ -91,6 +91,7 @@ const stepParenExpr = function (core, control) {
 };
 
 const stepForStmt = function (core, control) {
+  // TODO: cope with missing statements
   const {node, step} = control;
   if (step === 0) {
     // enter init, continue w/ step 1
