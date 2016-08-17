@@ -187,12 +187,14 @@ const stepIfStmt = function (core, control) {
 
 const stepReturnStmt = function (core, control) {
   const {node, step} = control;
-  if (step === 0) {
+  const exprNode = node[2][0];
+  if (exprNode && step === 0) {
     // Evaluate the expression whose value to return.
-    return {control: enterExpr(node[2][0], {...control, step: 1})};
+    return {control: enterExpr(exprNode, {...control, step: 1})};
   }
   // Transfering the control to 'return' indicates a function return.
-  return {control: 'return', result: core.result};
+  const result = step === 0 ? null : core.result;
+  return {control: 'return', result};
 };
 
 const stepCallExpr = function (core, control) {
