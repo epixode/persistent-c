@@ -2,7 +2,7 @@
 // TextEncoder shim for older browsers and Safari.
 import {TextEncoder} from 'text-encoding-utf-8';
 
-import {scalarTypes, arrayType, lubType} from './type';
+import {scalarTypes, arrayType, lubType, decayedType, pointerType} from './type';
 
 export function IntegralValue (type, number) {
   this.type = type;
@@ -116,6 +116,17 @@ PointerValue.prototype.toBool = function () {
 };
 PointerValue.prototype.pack = function (view, offset, littleEndian) {
   view.setUint32(offset, this.address, littleEndian);
+};
+
+export const makeRef = function (elemType, address) {
+  let refType;
+  if (elemType.kind === 'array') {
+    // A array reference decays to a pointer to its first element.
+    refType = decayedType(elemType);
+  } else {
+    refType = pointerType(elemType)
+  }
+  return new PointerValue(refType, address);
 };
 
 export function ArrayValue (type, elements) {
@@ -340,11 +351,6 @@ export const evalCast = function (type, operand) {
     }
   }
   throw new Error(`not implemented: (${type})${operand}`);
-};
-
-export const evalPointerAdd = function (pointer, value) {
-  const offset = value.toInteger() * pointer.type.pointee.size;
-  return new PointerValue(pointer.type, pointer.address + offset);
 };
 
 export const zeroAtType = function (type) {

@@ -17,7 +17,7 @@ import {
   scalarTypes, pointerType, functionType, arrayType, decayedType} from './type';
 import {
   IntegralValue, FloatingValue, PointerValue, BuiltinValue, FunctionValue, ArrayValue,
-  evalUnaryOperation, evalBinaryOperation, evalCast, evalPointerAdd} from './value';
+  evalUnaryOperation, evalBinaryOperation, evalCast, makeRef} from './value';
 import {findLocalDeclaration} from './scope';
 import {writeValue, readValue} from './memory';
 import {finalizeVarDecl} from './decl';
@@ -430,10 +430,16 @@ const stepDeref = function (core, control) {
     }
     // Normal value-mode path.
     const lvalue = core.result;
-    const effects = [['load', lvalue]];
-    // XXX special case if lvalue.type.pointee.kind === 'array'?
-    const result = readValue(core.memory, lvalue);
-    return {control: control.cont, result, effects};
+    if (lvalue.type.pointee.kind === 'array') {
+      // Rather than reading the array value, build a reference to its first
+      // element (with the appropriate decayed type).
+      const result = makeRef(lvalue.type.pointee, lvalue.address);
+      return {control: control.cont, result};
+    } else {
+      const result = readValue(core.memory, lvalue);
+      const effects = [['load', lvalue]];
+      return {control: control.cont, result, effects};
+    }
   }
 };
 
@@ -541,18 +547,20 @@ const stepArraySubscriptExpr = function (core, control) {
     };
   } else {
     // After subscript expr.
-    const array = control.array;
+    const {array} = control;
+    const elemType = array.type.pointee;
     const subscript = core.result;
-    const ref = evalPointerAdd(array, subscript);
-    const effects = [];
-    let result;
-    if (control.mode === 'lvalue' || ref.type.pointee.kind === 'array') {
-      result = ref;
+    const address = array.address + subscript.toInteger() * elemType.size;
+    const ref = makeRef(elemType, address);
+    if (control.mode === 'lvalue' || elemType.kind === 'array') {
+      // Return the reference in lvalue mode, or if the element type is
+      // an array (and ref has a decayed type).
+      return {control: control.cont, result: ref};
     } else {
-      result = readValue(core.memory, ref);
-      effects.push(['load', ref]);
+      const effects = [['load', ref]];
+      const result = readValue(core.memory, ref);
+      return {control: control.cont, result, effects};
     }
-    return {control: control.cont, result, effects};
   }
 };
 
