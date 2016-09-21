@@ -8,7 +8,7 @@ import {getStep} from './step';
 import {applyEffect} from './effects';
 import {finalizeVarDecl} from './decl';
 
-export {pointerType, scalarTypes} from './type';
+export {functionType, pointerType, arrayType, decayedType, scalarTypes} from './type';
 export {
   IntegralValue, FloatingValue, PointerValue, stringValue,
   BuiltinValue, FunctionValue} from './value';
