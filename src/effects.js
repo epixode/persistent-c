@@ -91,7 +91,8 @@ const applyVardeclEffect = function (state, effect) {
   const {core} = state;
   const parentScope = core.scope;
   const name = effect[1];
-  let type = effect[2];
+  const type = effect[2];
+  const refType = pointerType(type);
   const init = effect[3];
   let limit = parentScope.limit;
   let ref, doInit = !!init;
@@ -99,16 +100,14 @@ const applyVardeclEffect = function (state, effect) {
     if (type.kind === 'array' && init.type.kind === 'pointer') {
       // When an array variable is initialized with a ref (as opposed to an
       // array value), no stack allocation or initialization occurs.
-      // The array type 'type' is used instead of the pointer type 'init.type'
-      // when building the variable's ref.
-      ref = new PointerValue(pointerType(type), init.address);
+      ref = new PointerValue(refType, init.address);
       doInit = false;
     }
   }
   if (!ref) {
     // Allocate memory on stack and build a ref to that location.
     limit -= type.size;
-    ref = new PointerValue(pointerType(type), limit);
+    ref = new PointerValue(refType, limit);
   }
   core.scope = {
     parent: parentScope,
