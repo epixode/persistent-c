@@ -11,7 +11,7 @@ import {finalizeVarDecl} from './decl';
 export {functionType, pointerType, arrayType, decayedType, scalarTypes} from './type';
 export {
   IntegralValue, FloatingValue, PointerValue, stringValue,
-  BuiltinValue, FunctionValue} from './value';
+  BuiltinValue, FunctionValue, makeRef} from './value';
 export {readValue, writeValue, readString} from './memory';
 export {getStep} from './step';
 export {findClosestFunctionScope} from './scope';
