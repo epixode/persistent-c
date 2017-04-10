@@ -1,12 +1,12 @@
 {
   "name": "persistent-c",
   "version": "9.4.1",
-  "main": "lib/index.js",
   "description": "A C language step-by-step evaluator written in JavaScript and using persistent (immutable) data structures.",
+  "main": "index.js",
   "scripts": {
-    "build": "node_modules/.bin/babel src --out-dir lib",
-    "prepublish": "npm run build",
-    "test": "node_modules/.bin/babel-tape-runner ./spec/**/*.spec.js | node_modules/.bin/tap-spec"
+    "test": "babel-tape-runner ./spec/**/*.spec.js | tap-spec",
+    "build": "babel src --out-dir dist && cp package.json dist/",
+    "watch": "babel src --out-dir dist --watch"
   },
   "repository": {
     "type": "git",
@@ -28,7 +28,6 @@
     "babel-plugin-transform-object-rest-spread": "^6",
     "babel-preset-es2015": "^6",
     "babel-tape-runner": "^2.0.0",
-    "chokidar": "^1.4.3",
     "tap-spec": "^4.1.1",
     "tape": "^4.4.0"
   },
