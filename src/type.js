@@ -7,8 +7,8 @@ export const Type = function (kind, size) {
 }
 
 export const functionType = function (resultType, paramDecls) {
-  // Functions have size 1 by convention.
-  const type = new Type('function', 1);
+  // Functions have size 2 by convention.
+  const type = new Type('function', 2);
   type.result = resultType;
   type.params = paramDecls;  // [{name,type}]
   return type;
@@ -37,6 +37,14 @@ export const decayedType = function (origType) {
     // Decayed function type.
     type.pointee = origType;
   }
+  return type;
+};
+
+export const recordType = function (fields) {
+  const {size, fieldMap} = layoutRecord(fields);
+  const type = new Type('record', size);
+  type.fields = fields;
+  type.fieldMap = fieldMap;
   return type;
 };
 
@@ -81,3 +89,14 @@ export const arrayGroundType = function (type) {
     return type;
   }
 };
+
+function layoutRecord (fields) {
+  let size = 0;
+  const fieldMap = {};
+  fields.forEach(function (field) {
+    const {name, type} = field;
+    fieldMap[name] = {offset: size, type};
+    size += type.size;
+  });
+  return {size, fieldMap};
+}

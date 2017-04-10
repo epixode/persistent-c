@@ -14,7 +14,7 @@ with the seq property set to true.  In C, sequence points occur:
 */
 
 import {
-  scalarTypes, pointerType, functionType, arrayType, decayedType} from './type';
+  scalarTypes, pointerType, functionType, arrayType, decayedType, recordType} from './type';
 import {
   IntegralValue, FloatingValue, PointerValue, BuiltinValue, FunctionValue, ArrayValue,
   evalUnaryOperation, evalBinaryOperation, evalCast, makeRef} from './value';
@@ -351,6 +351,34 @@ const stepDeclRefExpr = function (core, control) {
     }
   }
   return {control: control.cont, result, effects};
+};
+
+const stepMemberExpr = function (core, control) {
+  if (control.step === 0) {
+    // Evaluate the expression as lvalue (or type).
+    const mode = control.mode === 'type' ? 'type' : 'lvalue';
+    return {
+      control: enterExpr(control.node[2][1], {...control, step: 1}, {mode})
+    };
+  } else {
+    const ref = core.result; // pointer to record
+    const recordType = ref.type.pointee;
+    const nameNode = control.node[2][0];
+    const identifier = nameNode[1].identifier;
+    const fieldDecl = recordType.fieldMap[identifier];
+    const fieldType = fieldDecl.type;
+    const fieldAddress = ref.address + fieldDecl.offset;
+    const fieldRef = new PointerValue(pointerType(fieldType), fieldAddress);
+    let result;
+    if (control.mode === 'type') {
+      result = fieldType;
+    } else if (control.mode === 'lvalue') {
+      result = fieldRef;
+    } else {
+      result = readValue(core.memory, fieldRef);
+    }
+    return {control: control.cont, result};
+  }
 };
 
 const stepUnaryOperator = function (core, control) {
@@ -745,6 +773,19 @@ const stepParmVarDecl = function (core, control) {
   return {control: control.cont, result: {name, type}};
 };
 
+const stepFieldDecl = function (core, control) {
+  const {node, step} = control;
+  if (step === 0) {
+    // Evaluate the type.
+    return {
+      control: enter(node[2][0], {...control, step: step + 1})
+    };
+  }
+  const name = node[1].name;
+  const type = core.result;
+  return {control: control.cont, result: {name, type}};
+};
+
 const stepParenType = function (core, control) {
   const {node, step} = control;
   if (step === 0) {
@@ -761,6 +802,30 @@ const stepDecayedType = function (core, control) {
   } else {
     return {control: control.cont, result: decayedType(core.result)};
   }
+};
+
+const stepRecordType = function (core, control) {
+  const {node} = control;
+  const type = core.recordDecls[node[1].name];
+  return {control: control.cont, result: type};
+};
+
+const stepRecordDecl = function (core, control) {
+  const {node, step} = control;
+  let values = control.values;
+  if (step === 0) {
+    values = [];
+  } else {
+    values = [...values, core.result];
+  }
+  if (step < node[2].length) {
+    return {
+      control: enter(node[2][step], {...control, step: step + 1, values})
+    };
+  }
+  const {name} = node[1];
+  const type = recordType(values);
+  return {control: control.cont, result: {name, type}};
 };
 
 export const getStep = function (core) {
@@ -796,6 +861,8 @@ export const getStep = function (core) {
     return stepExplicitCastExpr(core, control);
   case 'DeclRefExpr':
     return stepDeclRefExpr(core, control);
+  case 'MemberExpr':
+    return stepMemberExpr(core, control);
   case 'IntegerLiteral':
     return stepIntegerLiteral(core, control);
   case 'CharacterLiteral':
@@ -853,9 +920,16 @@ export const getStep = function (core) {
   case 'ParmVarDecl':
     return stepParmVarDecl(core, control);
   case 'ParenType':
+  case 'ElaboratedType':
     return stepParenType(core, control);
   case 'DecayedType':
     return stepDecayedType(core, control);
+  case 'RecordType':
+    return stepRecordType(core, control);
+  case 'RecordDecl':
+    return stepRecordDecl(core, control);
+  case 'FieldDecl':
+    return stepFieldDecl(core, control);
   }
   return {
     control,

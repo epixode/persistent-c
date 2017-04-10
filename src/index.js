@@ -36,6 +36,8 @@ export const start = function (context) {
       }
     });
 
+    console.log('declNode', declNode[0]);
+
     // Add the declaration to the global map.
     switch (declNode[0]) {
       case 'VarDecl': {
@@ -52,6 +54,12 @@ export const start = function (context) {
         const ref = new PointerValue(pointerType(type), address);
         core.memory = writeValue(core.memory, ref, init);
         core.globalMap[name] = ref;
+        break;
+      }
+      case 'RecordDecl': {
+        const {name, type} = stepThroughNode(core, declNode, options);
+        console.log('struct', name, type);
+        core.recordDecls[name] = type;
         break;
       }
       case 'FunctionDecl': {
@@ -84,7 +92,8 @@ const initCore = function (memorySize) {
   const scope = {key: 0, limit: memorySize};
   const memory = allocate(memorySize);
   const heapStart = 0x100;
-  return {globalMap, scope, memory, heapStart};
+  const recordDecls = {};
+  return {globalMap, scope, memory, heapStart, recordDecls};
 };
 
 export const applyStep = function (state, step) {
@@ -128,6 +137,10 @@ export const step = function (state) {
     return state;
   }
   const step = getStep(state.core);
+  if (!step) {
+    console.log(state.core);
+    return {...state, error: 'not implemented'};
+  }
   if ('error' in step) {
     // Evaluation cannot proceed due to an error.
     return {...state, error: step.error};
