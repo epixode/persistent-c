@@ -36,8 +36,6 @@ export const start = function (context) {
       }
     });
 
-    console.log('declNode', declNode[0]);
-
     // Add the declaration to the global map.
     switch (declNode[0]) {
       case 'VarDecl': {
@@ -58,7 +56,6 @@ export const start = function (context) {
       }
       case 'RecordDecl': {
         const {name, type} = stepThroughNode(core, declNode, options);
-        console.log('struct', name, type);
         core.recordDecls[name] = type;
         break;
       }
