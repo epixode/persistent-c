@@ -354,9 +354,10 @@ const stepDeclRefExpr = function (core, control) {
 };
 
 const stepMemberExpr = function (core, control) {
+  const isArrow = control.node[1].isArrow;
   if (control.step === 0) {
     // Evaluate the expression as lvalue (or type).
-    const mode = control.mode === 'type' ? 'type' : 'lvalue';
+    const mode = control.mode === 'type' ? 'type' : (isArrow ? 'value' : 'lvalue');
     return {
       control: enterExpr(control.node[2][1], {...control, step: 1}, {mode})
     };
