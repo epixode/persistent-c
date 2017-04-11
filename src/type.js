@@ -40,10 +40,11 @@ export const decayedType = function (origType) {
   return type;
 };
 
-export const recordType = function (fields) {
+export const recordType = function (name, fields) {
   const {size, fieldMap} = layoutRecord(fields);
   const type = new Type('record', size);
-  type.fields = fields;
+  type.name = name;
+  type.fields = fields.map(field => field.name);
   type.fieldMap = fieldMap;
   return type;
 };
@@ -95,7 +96,8 @@ function layoutRecord (fields) {
   const fieldMap = {};
   fields.forEach(function (field) {
     const {name, type} = field;
-    fieldMap[name] = {offset: size, type};
+    const refType = pointerType(type);
+    fieldMap[name] = {offset: size, type, refType};
     size += type.size;
   });
   return {size, fieldMap};

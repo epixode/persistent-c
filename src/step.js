@@ -366,9 +366,9 @@ const stepMemberExpr = function (core, control) {
     const nameNode = control.node[2][0];
     const identifier = nameNode[1].identifier;
     const fieldDecl = recordType.fieldMap[identifier];
-    const fieldType = fieldDecl.type;
+    const fieldRefType = fieldDecl.refType;
     const fieldAddress = ref.address + fieldDecl.offset;
-    const fieldRef = new PointerValue(pointerType(fieldType), fieldAddress);
+    const fieldRef = new PointerValue(fieldRefType, fieldAddress);
     let result;
     if (control.mode === 'type') {
       result = fieldType;
@@ -824,8 +824,8 @@ const stepRecordDecl = function (core, control) {
     };
   }
   const {name} = node[1];
-  const type = recordType(values);
-  return {control: control.cont, result: {name, type}};
+  const type = recordType(name, values);
+  return {control: control.cont, result: type};
 };
 
 export const getStep = function (core) {

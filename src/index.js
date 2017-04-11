@@ -55,8 +55,8 @@ export const start = function (context) {
         break;
       }
       case 'RecordDecl': {
-        const {name, type} = stepThroughNode(core, declNode, options);
-        core.recordDecls[name] = type;
+        const type = stepThroughNode(core, declNode, options);
+        core.recordDecls[type.name] = type;
         break;
       }
       case 'FunctionDecl': {
