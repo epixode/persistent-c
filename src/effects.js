@@ -1,17 +1,17 @@
 
 import {writeValue} from './memory';
-import {scalarTypes, pointerType, arrayType} from './type';
-import {IntegralValue, PointerValue, ArrayValue, zeroAtType} from './value';
+import {builtinTypes, pointerType, arrayType} from './type';
+import {IntegralValue, PointerValue, ArrayValue, FunctionValue, BuiltinValue, zeroAtType} from './value';
 import {findClosestBlockScope, findClosestFunctionScope} from './scope';
 
-const applyLoadEffect = function (state, effect) {
+function applyLoadEffect (state, effect) {
   // ['load', ref]
   const {core} = state;
   const ref = effect[1];
   core.memoryLog = core.memoryLog.push(effect);
 };
 
-const applyStoreEffect = function (state, effect) {
+function applyStoreEffect (state, effect) {
   // ['store', ref, value]
   const {core} = state;
   const ref = effect[1];
@@ -20,7 +20,7 @@ const applyStoreEffect = function (state, effect) {
   core.memoryLog = core.memoryLog.push(effect);
 };
 
-const applyEnterEffect = function (state, effect) {
+function applyEnterEffect (state, effect) {
   // ['enter', blockNode]
   const {core} = state;
   const parentScope = core.scope;
@@ -34,7 +34,7 @@ const applyEnterEffect = function (state, effect) {
   }
 };
 
-const applyLeaveEffect = function (state, effect) {
+function applyLeaveEffect (state, effect) {
   // ['leave', blockNode]
   const {core} = state;
   const scope = findClosestBlockScope(core.scope, effect[1]);
@@ -45,7 +45,7 @@ const applyLeaveEffect = function (state, effect) {
   core.scope = scope.parent;
 };
 
-const applyCallEffect = function (state, effect) {
+function applyCallEffect (state, effect) {
   // ['call', cont, [func, args...]]
   const {core} = state;
   const parentScope = core.scope;
@@ -61,8 +61,9 @@ const applyCallEffect = function (state, effect) {
   };
 };
 
-const applyReturnEffect = function (state, effect) {
+function applyReturnEffect (state, effect) {
   // ['return', result]
+  console.log('return', effect);
   const {core} = state;
   const result = effect[1];
   const scope = findClosestFunctionScope(core.scope);
@@ -78,7 +79,7 @@ const applyReturnEffect = function (state, effect) {
   // control leaving the 'main' function without a return statement, where
   // C99 defines the result as being 0).
   if (!result && scope.cont.values[0].name === 'main') {
-    core.result = new IntegralValue(scalarTypes['int'], 0);
+    core.result = new IntegralValue(builtinTypes['int'], 0);
   } else {
     core.result = result;
   }
@@ -86,7 +87,7 @@ const applyReturnEffect = function (state, effect) {
   core.direction = 'out';
 };
 
-const applyVardeclEffect = function (state, effect) {
+function applyVardeclEffect (state, effect) {
   // ['vardecl', name, type, init]
   const {core} = state;
   const parentScope = core.scope;
@@ -121,7 +122,44 @@ const applyVardeclEffect = function (state, effect) {
   }
 };
 
-export const defaultEffects = {
+function declareGlobalVar (state, effect) {
+  const {core} = state;
+  const name = effect[1];
+  const type = effect[2];
+  const init = effect[3];
+  const address = core.heapStart;
+  core.heapStart += type.size;  // XXX add alignment padding
+  const ref = new PointerValue(pointerType(type), address);
+  core.memory = writeValue(core.memory, ref, init);
+  core.globalMap[name] = ref;
+}
+
+function declareRecord (state, effect) {
+  const {core} = state;
+  const name = effect[1];
+  const type = effect[2];
+  core.recordDecls[name] = type;
+}
+
+function declareFunction (state, effect) {
+  const {core, builtins} = state;
+  const name = effect[1];
+  const {decl, type, body} = effect[2];
+  if (body) {
+    const codePtr = core.functions.length;
+    const value = new FunctionValue(type, codePtr, name, decl, body);
+    core.functions.push(value);
+    core.globalMap[name] = value;
+  } else if (typeof builtins[name] === 'function') {
+    const func = builtins[name];
+    const codePtr = core.functions.length;
+    const value = new BuiltinValue(type, codePtr, name, func);
+    core.functions.push(value);
+    core.globalMap[name] = value;
+  }
+}
+
+export const defaultEffectHandlers = {
   load: applyLoadEffect,
   store: applyStoreEffect,
   enter: applyEnterEffect,
@@ -131,15 +169,8 @@ export const defaultEffects = {
   vardecl: applyVardeclEffect
 };
 
-// applyEffect applies an effect by shallowly mutating the passed state
-// (both state and state.core are mutated).
-export const applyEffect = function (state, effect) {
-  const {effectHandlers} = state.options;
-  const handler = effectHandlers[effect[0]];
-  if (typeof handler === 'function') {
-    return handler(state, effect);
-  } else {
-    console.log('invalid handler', effect[0])
-    return state;
-  }
+export const declEffectHandlers = {
+  vardecl: declareGlobalVar,
+  recdecl: declareRecord,
+  fundecl: declareFunction
 };

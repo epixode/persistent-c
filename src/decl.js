@@ -1,5 +1,5 @@
 
-import {scalarTypes, arrayType, arraySize, arrayGroundType} from './type';
+import {builtinTypes, arrayType, arraySize, arrayGroundType} from './type';
 import {IntegralValue, ArrayValue, zeroAtType} from './value';
 
 export const finalizeVarDecl = function (type, init) {
@@ -21,7 +21,7 @@ const resolveArraySize = function (type, dims, rank) {
     return type;
   }
   const elemType = resolveArraySize(type.elem, dims, rank + 1);
-  const elemCount = new IntegralValue(scalarTypes['unsigned int'], type.count || dims[rank]);
+  const elemCount = new IntegralValue(builtinTypes['unsigned int'], type.count || dims[rank]);
   return arrayType(elemType, elemCount);
 };
 

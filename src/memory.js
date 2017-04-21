@@ -1,6 +1,6 @@
 
 import Immutable from 'immutable';
-import {packValue, unpackValue} from './value';
+import {packValue, unpackValue, badFunction} from './value';
 import {TextDecoder} from 'text-encoding-utf-8';
 
 const littleEndian = false;
@@ -24,15 +24,16 @@ export const writeValue = function (memory, ref, value) {
   return memory;
 };
 
-export const readValue = function (memory, ref) {
+export const readValue = function (core, ref) {
   // XXX assert(ref instanceof PointerValue)
+  const {memory} = core;
   const {type, address} = ref;
   const nbytes = type.pointee.size;
   const view = new DataView(new ArrayBuffer(nbytes));
   for (let offset = 0; offset < nbytes; offset += 1) {
     view.setUint8(offset, memory.get(address + offset));
   }
-  return unpackValue(view, 0, type.pointee, littleEndian);
+  return unpackValue(view, 0, type.pointee, littleEndian, core);
 };
 
 export const strlen = function (memory, ref, maxBytes) {

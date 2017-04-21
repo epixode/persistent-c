@@ -14,7 +14,7 @@ with the seq property set to true.  In C, sequence points occur:
 */
 
 import {
-  scalarTypes, pointerType, functionType, arrayType, decayedType, recordType} from './type';
+  builtinTypes, pointerType, functionType, arrayType, decayedType, recordType} from './type';
 import {
   IntegralValue, FloatingValue, PointerValue, BuiltinValue, FunctionValue, ArrayValue,
   evalUnaryOperation, evalBinaryOperation, evalCast, makeRef} from './value';
@@ -22,7 +22,7 @@ import {findLocalDeclaration} from './scope';
 import {writeValue, readValue} from './memory';
 import {finalizeVarDecl} from './decl';
 
-const one = new IntegralValue(scalarTypes['int'], 1);
+const one = new IntegralValue(builtinTypes['int'], 1);
 
 const findDeclaration = function (core, name) {
   return findLocalDeclaration(core.scope, name) || core.globalMap[name];
@@ -192,9 +192,9 @@ const stepReturnStmt = function (core, control) {
     // Evaluate the expression whose value to return.
     return {control: enterExpr(exprNode, {...control, step: 1})};
   }
-  // Transfering the control to 'return' indicates a function return.
   const result = step === 0 ? null : core.result;
-  return {control: 'return', result};
+  const effects = [['return', result]];
+  return {result: null, effects};
 };
 
 const stepCallExpr = function (core, control) {
@@ -215,52 +215,42 @@ const stepCallExpr = function (core, control) {
         control: enterExpr(node[2][step], {...control, step: step + 1, values})
       };
     }
+    /* All arguments have been evaluated, perform the call. */
     const funcVal = values[0];
-    // All arguments have been evaluated, perform the call.
+    /* A builtin handles the rest of the call step. */
     if (funcVal instanceof BuiltinValue) {
-      // A builtin function handles the rest of the call step.
       return funcVal.func(core, control.cont, values);
     }
-    if (funcVal instanceof FunctionValue) {
-      // A user-defined function holds the FunctionDecl node.
-      const funcNode = funcVal.decl;
-      const funcTypeNode = funcNode[2][1];
-      return {
-        control: enter(funcTypeNode, {...control, step: 'F', values})
-      };
+    if (!(funcVal instanceof FunctionValue)) {
+      return {error: `call error ${funcVal}`};
     }
-    return {control, error: `call error ${funcVal}`};
-  }
-  const funcVal = values[0];
-  const funcNode = funcVal.decl;
-  if (step === 'F') {
-    // The F step uses the evaluated type of the callee to set up the values of
-    // its formal parameters in its scope.
-    const funcType = core.result;
-    // The 'call' effect will open a function scope and store in it the return
-    // continuation and the function call values.
-    const cont = {...control, step: 'R'};
+    /* The 'call' effect opens a function scope and stores in it the return
+       continuation and the function call values. */
+    const cont = {...control, values, step: 'R'};
     const effects = [['call', cont, values]];
-    // Emit a 'vardecl' effect for each function argument.
+    const funcType = funcVal.type.pointee;
+    const funcBody = funcVal.body;
+    /* Emit a 'vardecl' effect for each function argument. */
     const params = funcType.params;
     for (let i = 0; i < params.length; i++) {
       const {name, type} = params[i];
       const init = i + 1 >= values.length ? null : values[1 + i];
       effects.push(['vardecl', name, type, init]);
     }
-    // Transfer control to the function body (a compound statement), setting
-    // 'return' as the continuation to obtain the effect of a "return;"
-    // statement if execution falls through the end of the block.
-    const funcBody = funcNode[2][2];
+    /* Transfer control to the function body (a compound statement). */
     return {
-      effects,
-      control: enterStmt(funcBody, 'return')
+      control: enterStmt(funcBody, {...control, step: 'r'}),
+      effects
     };
   }
+  if (step === 'r') {
+    const effects = [['return', null]];
+    return {result: null, effects};
+  }
   if (step === 'R') {
-    // The R step catches the callee's result and is only used as a stop to
-    // show the call's result while the function and arguments are still
-    // accessible (as control.values).
+    /* The R step catches the callee's result and is only used as a stop to
+       show the call's result while the function and arguments are still
+       accessible (as control.values). */
     return {
       control: control.cont,
       result: core.result
@@ -318,7 +308,8 @@ const stepExplicitCastExpr = function (core, control) {
 
 const stepDeclRefExpr = function (core, control) {
   const nameNode = control.node[2][0];
-  const ref = findDeclaration(core, nameNode[1].identifier);
+  const name = nameNode[1].identifier;
+  const ref = findDeclaration(core, name);
   const effects = [];
   let result;
   if (ref instanceof PointerValue) {
@@ -337,15 +328,15 @@ const stepDeclRefExpr = function (core, control) {
         // first element.
         result = new PointerValue(decayedType(varType), ref.address);
       } else {
-        result = readValue(core.memory, ref);
+        result = readValue(core, ref);
         effects.push(['load', ref]);
       }
     }
   } else {
     // If findDeclaration returns a non-pointer value (typically a function or
-    // a builtin), use the value directly and disallow taking its address.
-    if (control.mode === 'lvalue') {
-      throw new Error(`cannot take address of ${name[1].identifier}`);
+    // a builtin), use the value directly.
+    if (control.mode === 'type') {
+      result = ref.type;
     } else {
       result = ref;
     }
@@ -376,7 +367,7 @@ const stepMemberExpr = function (core, control) {
     } else if (control.mode === 'lvalue') {
       result = fieldRef;
     } else {
-      result = readValue(core.memory, fieldRef);
+      result = readValue(core, fieldRef);
     }
     return {control: control.cont, result};
   }
@@ -404,7 +395,7 @@ const stepAssignmentUnaryOperator = function (core, control) {
     };
   } else {
     const lvalue = core.result;
-    const oldValue = readValue(core.memory, lvalue);
+    const oldValue = readValue(core, lvalue);
     const opcode = control.node[1].opcode;
     const binOp = /Inc$/.test(opcode) ? 'Add' : 'Sub';
     const newValue = evalBinaryOperation(binOp, oldValue, one);
@@ -465,7 +456,7 @@ const stepDeref = function (core, control) {
       const result = makeRef(lvalue.type.pointee, lvalue.address);
       return {control: control.cont, result};
     } else {
-      const result = readValue(core.memory, lvalue);
+      const result = readValue(core, lvalue);
       const effects = [['load', lvalue]];
       return {control: control.cont, result, effects};
     }
@@ -483,7 +474,7 @@ const stepUnaryExprOrTypeTraitExpr = function (core, control) {
     };
   }
   const type = core.result;
-  const result = new IntegralValue(scalarTypes['int'], type.size);
+  const result = new IntegralValue(builtinTypes['int'], type.size);
   return {control: control.cont, result};
 };
 
@@ -546,7 +537,7 @@ const stepAssignmentBinaryOperator = function (core, control) {
   } else if (control.step === 1) {
     // After LHS, before RHS.
     const lvalue = core.result;
-    const lhs = readValue(core.memory, lvalue);
+    const lhs = readValue(core, lvalue);
     return {
       control: enterExpr(control.node[2][1], {...control, step: 2, lvalue, lhs}),
       effects: [['load', lvalue]]
@@ -587,7 +578,7 @@ const stepArraySubscriptExpr = function (core, control) {
       return {control: control.cont, result: ref};
     } else {
       const effects = [['load', ref]];
-      const result = readValue(core.memory, ref);
+      const result = readValue(core, ref);
       return {control: control.cont, result, effects};
     }
   }
@@ -658,7 +649,7 @@ const stepIntegerLiteral = function (core, control) {
   // XXX use different type if value ends with l, ll, ul, ull
   return {
     control: control.cont,
-    result: new IntegralValue(scalarTypes['int'], parseInt(value))
+    result: new IntegralValue(builtinTypes['int'], parseInt(value))
   };
 };
 
@@ -667,13 +658,13 @@ const stepCharacterLiteral = function (core, control) {
   // XXX use 'unsigned char' if value ends with 'u'
   return {
     control: control.cont,
-    result: new IntegralValue(scalarTypes['char'], parseInt(value))
+    result: new IntegralValue(builtinTypes['char'], parseInt(value))
   };
 };
 
 const stepFloatingLiteral = function (core, control) {
   const value = control.node[1].value;
-  const type = /[fF]$/.test(value) ? scalarTypes['float'] : scalarTypes['double'];
+  const type = /[fF]$/.test(value) ? builtinTypes['float'] : builtinTypes['double'];
   return {
     control: control.cont,
     result: new FloatingValue(type, parseFloat(value))
@@ -689,7 +680,7 @@ const stepStringLiteral = function (core, control) {
 
 const stepBuiltinType = function (core, control) {
   const {name} = control.node[1];
-  const result = scalarTypes[name];
+  const result = builtinTypes[name];
   return {control: control.cont, result};
 };
 
@@ -710,7 +701,7 @@ const stepConstantArrayType = function (core, control) {
     return {control: enter(node[2][0], {...control, step: 1})};
   }
   const elemType = core.result;
-  const elemCount = new IntegralValue(scalarTypes['unsigned int'], parseInt(node[1].size));
+  const elemCount = new IntegralValue(builtinTypes['unsigned int'], parseInt(node[1].size));
   const result = arrayType(elemType, elemCount);
   return {control: control.cont, result};
 };
@@ -811,6 +802,23 @@ const stepRecordType = function (core, control) {
   return {control: control.cont, result: type};
 };
 
+const stepFunctionDecl = function (core, control) {
+  /* FunctionDecl({define}, [name, type, body]) */
+  const {node, step} = control;
+  if (step === 0) {
+    return {control: enter(node[2][1], {...control, step: step + 1})};
+  }
+  const name = node[2][0][1].identifier;
+  const type = core.result;
+  const body = node[1].define ? node[2][2] : null;
+  const effects = [['fundecl', name, {decl: node, type, body}]];
+  return {control: control.cont, result: null, effects};
+};
+
+const stepTypedefDecl = function (core, control) {
+  return {control: control.cont, result: null};
+};
+
 const stepRecordDecl = function (core, control) {
   const {node, step} = control;
   let values = control.values;
@@ -826,7 +834,8 @@ const stepRecordDecl = function (core, control) {
   }
   const {name} = node[1];
   const type = recordType(name, values);
-  return {control: control.cont, result: type};
+  const effects = [['recdecl', name, type]];
+  return {control: control.cont, result: null, effects};
 };
 
 export const getStep = function (core) {
@@ -884,7 +893,6 @@ export const getStep = function (core) {
         return stepDeref(core, control);
       default:
         return {
-          control,
           error: `cannot step through UnaryOperator ${control.node[1].opcode}`
         };
     }
@@ -927,13 +935,16 @@ export const getStep = function (core) {
     return stepDecayedType(core, control);
   case 'RecordType':
     return stepRecordType(core, control);
+  case 'FunctionDecl':
+    return stepFunctionDecl(core, control);
+  case 'TypedefDecl':
+    return stepTypedefDecl(core, control);
   case 'RecordDecl':
     return stepRecordDecl(core, control);
   case 'FieldDecl':
     return stepFieldDecl(core, control);
   }
   return {
-    control,
     error: `cannot step through ${control.node[0]}`
   };
 };

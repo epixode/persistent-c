@@ -1,20 +1,25 @@
 
-export const pointerSize = 4;
-
 export const Type = function (kind, size) {
   this.kind = kind;
   this.size = size;
 }
 
 export const functionType = function (resultType, paramDecls) {
-  // Functions have size 2 by convention.
-  const type = new Type('function', 2);
+  const type = new Type('function', 0);
   type.result = resultType;
   type.params = paramDecls;  // [{name,type}]
   return type;
 };
 
+function getPointerSize (pointeeType) {
+  if (pointeeType.kind === 'function') {
+    return 2;
+  }
+  return 4;
+}
+
 export const pointerType = function (pointeeType) {
+  const pointerSize = getPointerSize(pointeeType);
   const type = new Type('pointer', pointerSize);
   type.pointee = pointeeType;
   return type;
@@ -28,6 +33,7 @@ export const arrayType = function (elemType, elemCount) {
 };
 
 export const decayedType = function (origType) {
+  const pointerSize = getPointerSize(origType);
   const type = new Type('pointer', pointerSize);
   type.orig = origType;
   if (origType.kind === 'array') {
@@ -49,24 +55,25 @@ export const recordType = function (name, fields) {
   return type;
 };
 
-export const scalarTypes = {};
-const addScalarType = function (repr, size) {
-  const type = new Type('scalar', size);
+export const builtinTypes = {};
+const addBuiltinType = function (repr, size) {
+  const type = new Type('builtin', size);
   type.repr = repr;
-  scalarTypes[repr] = type;
+  builtinTypes[repr] = type;
 };
-addScalarType('char', 1);
-addScalarType('unsigned char', 1);
-addScalarType('short', 2);
-addScalarType('unsigned short', 2);
-addScalarType('int', 4);
-addScalarType('unsigned int', 4);
-addScalarType('long', 4);
-addScalarType('unsigned long', 4);
-addScalarType('long long', 8);
-addScalarType('unsigned long long', 8);
-addScalarType('float', 4);
-addScalarType('double', 8);
+addBuiltinType('void', 0);
+addBuiltinType('char', 1);
+addBuiltinType('unsigned char', 1);
+addBuiltinType('short', 2);
+addBuiltinType('unsigned short', 2);
+addBuiltinType('int', 4);
+addBuiltinType('unsigned int', 4);
+addBuiltinType('long', 4);
+addBuiltinType('unsigned long', 4);
+addBuiltinType('long long', 8);
+addBuiltinType('unsigned long long', 8);
+addBuiltinType('float', 4);
+addBuiltinType('double', 8);
 
 export const lubType = function (t1, t2) {
   // This function should compute least-upper-bound of (t1, t2), but it is

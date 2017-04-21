@@ -2,7 +2,7 @@
 // TextEncoder shim for older browsers and Safari.
 import {TextEncoder} from 'text-encoding-utf-8';
 
-import {scalarTypes, arrayType, lubType, decayedType, pointerType} from './type';
+import {builtinTypes, arrayType, lubType, decayedType, pointerType, functionType} from './type';
 
 export function IntegralValue (type, number) {
   this.type = type;
@@ -143,23 +143,52 @@ ArrayValue.prototype.pack = function (view, offset, littleEndian) {
   });
 };
 
-export function FunctionValue (decl) {
+export function FunctionValue (type, codePtr, name, decl, body) {
+  this.type = pointerType(type);
+  this.codePtr = codePtr;
+  this.name = name;
   this.decl = decl;
-  this.name = decl[2][0][1].identifier;
+  this.body = body;
+};
+FunctionValue.prototype.toString = function () {
+  return `&${this.name}`;
+}
+FunctionValue.prototype.pack = function (view, offset, littleEndian) {
+  view.setUint16(offset, this.codePtr, littleEndian);
+};
+FunctionValue.prototype.toInteger = function () {
+  return this.codePtr;
 };
 
-export function BuiltinValue (name, func) {
+export function BuiltinValue (type, codePtr, name, func) {
+  this.type = type;
+  this.codePtr = codePtr;
   this.name = name;
   this.func = func;
 };
+BuiltinValue.prototype.toString = function () {
+  return `&${this.name}`;
+}
+BuiltinValue.prototype.pack = function (view, offset, littleEndian) {
+  view.setUint16(offset, this.codePtr, littleEndian);
+};
+BuiltinValue.prototype.toInteger = function () {
+  return this.codePtr;
+};
+
+export const badFunction = new BuiltinValue (
+  functionType(builtinTypes['void'], []), 0, "bad_func",
+  function (state, cont, values) {
+    return {error: `bad function`};
+  });
 
 export const packValue = function (view, offset, value, littleEndian) {
   value.pack(view, offset, littleEndian);
 };
 
-export const unpackValue = function (view, offset, type, littleEndian) {
+export const unpackValue = function (view, offset, type, littleEndian, core) {
   switch (type.kind) {
-    case 'scalar':
+    case 'builtin':
       switch (type.repr) {
         case 'char':
           return new IntegralValue(type, view.getInt8(offset));
@@ -180,7 +209,7 @@ export const unpackValue = function (view, offset, type, littleEndian) {
         case 'double':
           return new FloatingValue(type, view.getFloat64(offset, littleEndian));
         default:
-          throw new Error(`unpack scalar ${type.repr}`);
+          throw new Error(`unpack builtin ${type.repr}`);
       }
     case 'array':
       {
@@ -188,12 +217,19 @@ export const unpackValue = function (view, offset, type, littleEndian) {
         const elemSize = elemType.size;
         const elements = [];
         for (var index = 0; index < type.count; index++) {
-          elements.push(unpackValue(view, offset + index * elemSize, elemType, littleEndian));
+          elements.push(unpackValue(view, offset + index * elemSize, elemType, littleEndian, core));
         }
         return new ArrayValue(type, elements);
       }
-    case 'pointer':
-      return new PointerValue(type, view.getUint32(offset, littleEndian));
+    case 'pointer': {
+      if (type.pointee.kind === 'function') {
+        const codePtr = view.getUint16(offset, littleEndian);
+        return core.functions[codePtr] || badFunction;
+      } else {
+        const address = view.getUint32(offset, littleEndian);
+        return new PointerValue(type, address);
+      }
+    }
     default:
       throw new Error(`not implemented: unpack ${type.kind}`);
   }
@@ -202,14 +238,14 @@ export const unpackValue = function (view, offset, type, littleEndian) {
 export const stringValue = function (string) {
   const encoder = new TextEncoder('utf-8');
   const bytesArray = encoder.encode(string);
-  const charType = scalarTypes['char'];
+  const charType = builtinTypes['char'];
   const charLen = bytesArray.length;
   const chars = [];
   for (let charPos = 0; charPos < charLen; charPos++) {
     chars.push(new IntegralValue(charType, bytesArray[charPos]));
   }
   chars.push(new IntegralValue(charType, 0));
-  const lenValue = new IntegralValue(scalarTypes['int'], chars.length);
+  const lenValue = new IntegralValue(builtinTypes['int'], chars.length);
   return new ArrayValue(arrayType(charType, lenValue), chars);
 };
 
@@ -256,7 +292,7 @@ export const evalBinaryOperation = function (opcode, lhs, rhs) {
   // Relational operators
   if (isRelational(opcode)) {
     const result = evalRelationalOperation(opcode, lhs.number, rhs.number);
-    return new IntegralValue(scalarTypes['int'], result ? 1 : 0);
+    return new IntegralValue(builtinTypes['int'], result ? 1 : 0);
   }
   // Integer arithmetic
   if (lhs instanceof IntegralValue && rhs instanceof IntegralValue) {
@@ -288,7 +324,7 @@ export const evalBinaryOperation = function (opcode, lhs, rhs) {
   if (lhs instanceof PointerValue && rhs instanceof PointerValue) {
     if (opcode === 'Sub') {
       const offset = lhs.address - rhs.address;
-      return new IntegralValue(scalarTypes['int'], offset);
+      return new IntegralValue(builtinTypes['int'], offset);
     }
   }
   throw new Error(`not implemented: ${lhs} ${opcode} ${rhs}`);
@@ -299,7 +335,7 @@ export const evalUnaryOperation = function (opcode, operand) {
     switch (opcode) {
       case 'Plus': return operand;
       case 'Minus': return new IntegralValue(operand.type, -operand.number);
-      case 'LNot': return new IntegralValue(scalarTypes['int'], !operand.toBool());
+      case 'LNot': return new IntegralValue(builtinTypes['int'], !operand.toBool());
       case 'Not': return new IntegralValue(operand.type, ~operand.number);
     }
   }
@@ -313,7 +349,7 @@ export const evalUnaryOperation = function (opcode, operand) {
 };
 
 export const evalCast = function (type, operand) {
-  if (type.kind === 'scalar') {
+  if (type.kind === 'builtin') {
     if (/^(unsigned )?char$/.test(type.repr)) {
       return new IntegralValue(type, operand.toInteger() & 0xff);
     }
@@ -357,7 +393,7 @@ export const zeroAtType = function (type) {
   if (type.kind === 'pointer') {
     return new PointerValue(type, 0);
   }
-  if (type.kind === 'scalar') {
+  if (type.kind === 'builtin') {
     switch (type.repr) {
       case 'char':
       case 'unsigned char':
