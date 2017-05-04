@@ -194,7 +194,7 @@ const stepReturnStmt = function (core, control) {
   }
   const result = step === 0 ? null : core.result;
   const effects = [['return', result]];
-  return {result: null, effects};
+  return {effects};
 };
 
 const stepCallExpr = function (core, control) {
@@ -217,31 +217,34 @@ const stepCallExpr = function (core, control) {
     }
     /* All arguments have been evaluated, perform the call. */
     const funcVal = values[0];
-    /* A builtin handles the rest of the call step. */
+    /* Builtins are handled as an effect. */
     if (funcVal instanceof BuiltinValue) {
-      return funcVal.func(core, control.cont, values);
+      return {
+        control: {...control, step: 'R', seq: 'expr'},
+        effects: [['builtin', funcVal.name, ...values.slice(1)]]
+      };
     }
-    if (!(funcVal instanceof FunctionValue)) {
-      return {error: `call error ${funcVal}`};
+    if (funcVal instanceof FunctionValue) {
+      /* The 'call' effect opens a function scope and stores in it the return
+         continuation and the function call values. */
+      const cont = {...control, values, step: 'R'};
+      const effects = [['call', cont, values]];
+      const funcType = funcVal.type.pointee;
+      const funcBody = funcVal.body;
+      /* Emit a 'vardecl' effect for each function argument. */
+      const params = funcType.params;
+      for (let i = 0; i < params.length; i++) {
+        const {name, type} = params[i];
+        const init = i + 1 >= values.length ? null : values[1 + i];
+        effects.push(['vardecl', name, type, init]);
+      }
+      /* Transfer control to the function body (a compound statement). */
+      return {
+        control: enterStmt(funcBody, {...control, step: 'r'}),
+        effects
+      };
     }
-    /* The 'call' effect opens a function scope and stores in it the return
-       continuation and the function call values. */
-    const cont = {...control, values, step: 'R'};
-    const effects = [['call', cont, values]];
-    const funcType = funcVal.type.pointee;
-    const funcBody = funcVal.body;
-    /* Emit a 'vardecl' effect for each function argument. */
-    const params = funcType.params;
-    for (let i = 0; i < params.length; i++) {
-      const {name, type} = params[i];
-      const init = i + 1 >= values.length ? null : values[1 + i];
-      effects.push(['vardecl', name, type, init]);
-    }
-    /* Transfer control to the function body (a compound statement). */
-    return {
-      control: enterStmt(funcBody, {...control, step: 'r'}),
-      effects
-    };
+    return {error: `call error ${funcVal}`};
   }
   if (step === 'r') {
     const effects = [['return', null]];
@@ -736,10 +739,12 @@ const stepIncompleteArrayType = function (core, control) {
 const stepFunctionProtoType = function (core, control) {
   const {node, step} = control;
   const cont = {...control, step: step + 1};
-  if (step === 1) {
-    cont.result = core.result;
+  if (step === 0) {
+    cont.result = builtinTypes['int']; /* default */
     cont.params = [];
-  } else if (step > 1) {
+  } else if (core.result.kind) { /* result type */
+    cont.result = core.result;
+  } else { /* param {name,type} */
     cont.params = control.params.slice();
     cont.params.push(core.result);
   }
@@ -805,13 +810,17 @@ const stepRecordType = function (core, control) {
 const stepFunctionDecl = function (core, control) {
   /* FunctionDecl({define}, [name, type, body]) */
   const {node, step} = control;
+  /* TEMP: skip malform decl --- TODO: fix c-to-json */
+  if (/Decl$/.test(node[2][1][0])) {
+    return {control: control.cont, result: null};
+  }
   if (step === 0) {
     return {control: enter(node[2][1], {...control, step: step + 1})};
   }
   const name = node[2][0][1].identifier;
   const type = core.result;
   const body = node[1].define ? node[2][2] : null;
-  const effects = [['fundecl', name, {decl: node, type, body}]];
+  const effects = [['fundecl', name, type, body, node]];
   return {control: control.cont, result: null, effects};
 };
 
@@ -838,7 +847,7 @@ const stepRecordDecl = function (core, control) {
   return {control: control.cont, result: null, effects};
 };
 
-export const getStep = function (core) {
+const getStep = function (core) {
   const {control} = core;
   switch (control.node[0]) {
   case 'CompoundStmt':
@@ -944,7 +953,30 @@ export const getStep = function (core) {
   case 'FieldDecl':
     return stepFieldDecl(core, control);
   }
-  return {
-    error: `cannot step through ${control.node[0]}`
-  };
+  return {error: `cannot step through ${control.node[0]}`};
+};
+
+export const step = function (core) {
+  // Performs a single step.
+  if (!core.control) {
+    // Program is halted.
+    throw {name: 'halted'};
+  }
+  const step = getStep(core);
+  if (!step) {
+    throw {name: 'stuck'};
+  }
+  if ('error' in step) {
+    throw {name: 'error', details: step.error};
+  }
+  const effects = step.effects || [];
+  /* Shorthand for 'control' effect. */
+  if ('control' in step) {
+    effects.unshift(['control', step.control]);
+  }
+  /* Shorthand for 'result' effect. */
+  if ('result' in step) {
+    effects.push(['result', step.result]);
+  }
+  return effects;
 };

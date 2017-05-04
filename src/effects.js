@@ -4,27 +4,47 @@ import {builtinTypes, pointerType, arrayType} from './type';
 import {IntegralValue, PointerValue, ArrayValue, FunctionValue, BuiltinValue, zeroAtType} from './value';
 import {findClosestBlockScope, findClosestFunctionScope} from './scope';
 
-function applyLoadEffect (state, effect) {
-  // ['load', ref]
-  const {core} = state;
-  const ref = effect[1];
-  core.memoryLog = core.memoryLog.push(effect);
+export default {
+  /* These effects only mutate 'core'. */
+  doControl,
+  doResult,
+  doLoad,
+  doStore,
+  doEnter,
+  doLeave,
+  doCall,
+  doReturn,
+  doVardecl,
+  /* The 'declare' effects also mutate these elements of 'core':
+     globalMap, recordDecls, functions
+  */
+  declareGlobalVar,
+  declareRecord,
+  declareFunction
 };
 
-function applyStoreEffect (state, effect) {
-  // ['store', ref, value]
-  const {core} = state;
-  const ref = effect[1];
-  const value = effect[2];
+function doControl (core, control) {
+  core.control = control;
+  core.direction = 'down';
+  core.result = undefined;
+};
+
+function doResult (core, result) {
+  core.direction = 'up';
+  core.result = result;
+};
+
+function doLoad (core, ref) {
+  core.memoryLog = core.memoryLog.push(['load', ref]);
+};
+
+function doStore (core, ref, value) {
   core.memory = writeValue(core.memory, ref, value);
-  core.memoryLog = core.memoryLog.push(effect);
+  core.memoryLog = core.memoryLog.push(['store', ref, value]);
 };
 
-function applyEnterEffect (state, effect) {
-  // ['enter', blockNode]
-  const {core} = state;
+function doEnter (core, blockNode) {
   const parentScope = core.scope;
-  const blockNode = effect[1];
   core.scope = {
     parent: parentScope,
     key: parentScope.key + 1,
@@ -34,23 +54,18 @@ function applyEnterEffect (state, effect) {
   }
 };
 
-function applyLeaveEffect (state, effect) {
-  // ['leave', blockNode]
-  const {core} = state;
-  const scope = findClosestBlockScope(core.scope, effect[1]);
+function doLeave (core, blockNode) {
+  const scope = findClosestBlockScope(core.scope, blockNode);
   if (!scope) {
-    console.log('stack underflow', core.scope, effect);
+    console.log('stack underflow', core.scope, blockNode);
     throw new Error('stack underflow');
   }
   core.scope = scope.parent;
 };
 
-function applyCallEffect (state, effect) {
-  // ['call', cont, [func, args...]]
-  const {core} = state;
+function doCall (core, cont, values) {
+  /* values is [func, args...] */
   const parentScope = core.scope;
-  const cont = effect[1];
-  const values = effect[2];
   core.scope = {
     parent: parentScope,
     key: parentScope.key + 1,
@@ -61,14 +76,10 @@ function applyCallEffect (state, effect) {
   };
 };
 
-function applyReturnEffect (state, effect) {
-  // ['return', result]
-  console.log('return', effect);
-  const {core} = state;
-  const result = effect[1];
+function doReturn (core, result) {
   const scope = findClosestFunctionScope(core.scope);
   if (!scope) {
-    console.log('stack underflow', core.scope, effect);
+    console.log('stack underflow', core.scope, result);
     throw new Error('stack underflow');
   }
   // Pop all scopes up to and including the function's scope.
@@ -87,14 +98,9 @@ function applyReturnEffect (state, effect) {
   core.direction = 'out';
 };
 
-function applyVardeclEffect (state, effect) {
-  // ['vardecl', name, type, init]
-  const {core} = state;
+function doVardecl (core, name, type, init) {
   const parentScope = core.scope;
-  const name = effect[1];
-  const type = effect[2];
   const refType = pointerType(type);
-  const init = effect[3];
   let limit = parentScope.limit;
   let ref, doInit = !!init;
   if (doInit) {
@@ -118,59 +124,35 @@ function applyVardeclEffect (state, effect) {
     name, type, ref
   };
   if (doInit) {
-    applyStoreEffect(state, ['store', ref, init]);
+    doStore(core, ref, init);
   }
 };
 
-function declareGlobalVar (state, effect) {
-  const {core} = state;
-  const name = effect[1];
-  const type = effect[2];
-  const init = effect[3];
+function declareGlobalVar (core, name, type, init) {
   const address = core.heapStart;
+  console.log('alloc', address, type.size);
   core.heapStart += type.size;  // XXX add alignment padding
+  console.log('heap start', core.heapStart);
   const ref = new PointerValue(pointerType(type), address);
   core.memory = writeValue(core.memory, ref, init);
   core.globalMap[name] = ref;
-}
-
-function declareRecord (state, effect) {
-  const {core} = state;
-  const name = effect[1];
-  const type = effect[2];
-  core.recordDecls[name] = type;
-}
-
-function declareFunction (state, effect) {
-  const {core, builtins} = state;
-  const name = effect[1];
-  const {decl, type, body} = effect[2];
-  if (body) {
-    const codePtr = core.functions.length;
-    const value = new FunctionValue(type, codePtr, name, decl, body);
-    core.functions.push(value);
-    core.globalMap[name] = value;
-  } else if (typeof builtins[name] === 'function') {
-    const func = builtins[name];
-    const codePtr = core.functions.length;
-    const value = new BuiltinValue(type, codePtr, name, func);
-    core.functions.push(value);
-    core.globalMap[name] = value;
-  }
-}
-
-export const defaultEffectHandlers = {
-  load: applyLoadEffect,
-  store: applyStoreEffect,
-  enter: applyEnterEffect,
-  leave: applyLeaveEffect,
-  call: applyCallEffect,
-  return: applyReturnEffect,
-  vardecl: applyVardeclEffect
 };
 
-export const declEffectHandlers = {
-  vardecl: declareGlobalVar,
-  recdecl: declareRecord,
-  fundecl: declareFunction
+function declareRecord (core, name, type) {
+  core.recordDecls[name] = type;
+};
+
+/* XXX check if decl can be omitted, it is only used because directives are
+   lifted from the function body-block into the fundecl node "to allow
+   directives to inspect arguments". */
+function declareFunction (core, name, type, body, decl) {
+  const codePtr = core.functions.length;
+  let value;
+  if (body) {
+    value = new FunctionValue(type, codePtr, name, body, decl);
+  } else {
+    value = new BuiltinValue(type, codePtr, name);
+  }
+  core.functions.push(value);
+  core.globalMap[name] = value;
 };

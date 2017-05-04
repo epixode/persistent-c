@@ -143,12 +143,12 @@ ArrayValue.prototype.pack = function (view, offset, littleEndian) {
   });
 };
 
-export function FunctionValue (type, codePtr, name, decl, body) {
+export function FunctionValue (type, codePtr, name, body, decl) {
   this.type = pointerType(type);
   this.codePtr = codePtr;
   this.name = name;
-  this.decl = decl;
   this.body = body;
+  this.decl = decl;
 };
 FunctionValue.prototype.toString = function () {
   return `&${this.name}`;
