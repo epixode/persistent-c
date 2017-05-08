@@ -42,26 +42,24 @@ const enterStmt = function (node, cont, attrs) {
 
 const stepCompoundStmt = function (core, control) {
   const {node, step} = control;
+  const effects = [];
+
+  // Set up a frame for the block's declarations when entering the block.
+  if (step === 0) {
+    effects.push(['enter', node]);
+  }
 
   // When falling through the end of the block, issue a 'leave' effect to
   // clean up the block's scope.
   if (step >= node[2].length) {
-    return {
-      result: null, control: control.cont,
-      effects: [['leave', node]],
-    };
+    effects.push(['leave', node]);
+    return {result: null, control: control.cont, effects};
   }
 
   // Set up a continuation and pass control to the next child.
   const cont = {...control, step: step + 1};
-  const result = {control: enterStmt(node[2][step], cont)};
 
-  // Set up a frame for the block's declarations when entering the block.
-  if (step === 0) {
-    result.effects = [['enter', node]];
-  }
-
-  return result;
+  return {control: enterStmt(node[2][step], cont), effects};
 };
 
 const stepDeclStmt = function (core, control) {
