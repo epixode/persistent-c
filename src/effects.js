@@ -130,9 +130,7 @@ function doVardecl (core, name, type, init) {
 
 function declareGlobalVar (core, name, type, init) {
   const address = core.heapStart;
-  console.log('alloc', address, type.size);
   core.heapStart += type.size;  // XXX add alignment padding
-  console.log('heap start', core.heapStart);
   const ref = new PointerValue(pointerType(type), address);
   core.memory = writeValue(core.memory, ref, init);
   core.globalMap[name] = ref;

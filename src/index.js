@@ -56,7 +56,6 @@ export function execDecls (core, decls) {
     stepThroughNode(core, declNode, declHandlers);
   });
 };
-
 const stepThroughNode = function (core, node, handlers) {
   core.control = {node, step: 0};
   while (core.control) {
