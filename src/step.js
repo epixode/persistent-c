@@ -89,24 +89,42 @@ const stepParenExpr = function (core, control) {
 };
 
 const stepForStmt = function (core, control) {
-  // TODO: cope with missing statements
-  const {node, step} = control;
+  /* [init, cond, inc, body] */
+  let {node, step} = control;
+  let forceCond = false;
+  const {noInit, noInc, noCond} = node[1];
   if (step === 0) {
-    // enter init, continue w/ step 1
-    return {control: enterStmt(node[2][0], {...control, step: 1})};
-  }
-  if (step === 1) {
-    // enter cond, continue w/ step 3
-    return {control: enterStmt(node[2][1], {...control, step: 3})};
+    if (noInit) {
+      // skip to cond
+      step = 1;
+    } else {
+      // enter init, continue w/ cond
+      return {control: enterStmt(node[2][0], {...control, step: 1})};
+    }
   }
   if (step === 2) {
-    // enter update, continue w/ step 1
-    return {control: enterStmt(node[2][2], {...control, step: 1})};
+    if (noInc) {
+      // skip to cond
+      step = 1;
+    } else {
+      // enter inc, continue w/ cond
+      return {control: enterStmt(node[2][2 - noInit - noInc], {...control, step: 1})};
+    }
+  }
+  if (step === 1) {
+    if (noCond) {
+      // skip to body
+      step = 3;
+      forceCond = true;
+    } else {
+      // enter cond, continue w/ step 3
+      return {control: enterStmt(node[2][1 - noInit], {...control, step: 3})};
+    }
   }
   if (step === 3) {
     // result ? (enter body, continue w/ step 2) : leave
-    if (core.result.toBool()) {
-      return {control: enterStmt(node[2][3], {...control, step: 2, break: 4})};
+    if (forceCond || core.result.toBool()) {
+      return {control: enterStmt(node[2][3 - noInit - noInc - noCond], {...control, step: 2, break: 4})};
     }
   }
   return {control: control.cont, result: null};
