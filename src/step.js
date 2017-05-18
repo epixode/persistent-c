@@ -108,7 +108,7 @@ const stepForStmt = function (core, control) {
       step = 1;
     } else {
       // enter inc, continue w/ cond
-      return {control: enterStmt(node[2][2 - noInit - noInc], {...control, step: 1})};
+      return {control: enterStmt(node[2][2 - toInt(noInit) - toInt(noInc)], {...control, step: 1})};
     }
   }
   if (step === 1) {
@@ -118,17 +118,20 @@ const stepForStmt = function (core, control) {
       forceCond = true;
     } else {
       // enter cond, continue w/ step 3
-      return {control: enterStmt(node[2][1 - noInit], {...control, step: 3})};
+      return {control: enterStmt(node[2][1 - toInt(noInit)], {...control, step: 3})};
     }
   }
   if (step === 3) {
     // result ? (enter body, continue w/ step 2) : leave
     if (forceCond || core.result.toBool()) {
-      return {control: enterStmt(node[2][3 - noInit - noInc - noCond], {...control, step: 2, break: 4})};
+      return {control: enterStmt(node[2][3 - toInt(noInit) - toInt(noInc) - toInt(noCond)], {...control, step: 2, break: 4})};
     }
   }
   return {control: control.cont, result: null};
 };
+function toInt (p) {
+  return p ? 1 : 0;
+}
 
 const stepWhileStmt = function (core, control) {
   const {node, step} = control;
