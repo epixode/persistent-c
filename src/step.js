@@ -367,6 +367,7 @@ const stepDeclRefExpr = function (core, control) {
 };
 
 const stepMemberExpr = function (core, control) {
+  /* [Name, expr] */
   const isArrow = control.node[1].isArrow;
   if (control.step === 0) {
     // Evaluate the expression as lvalue (or type).
