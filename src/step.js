@@ -646,6 +646,15 @@ const stepConditionalOperator = function (core, control) {
   }
 };
 
+function stepCXXMemberCallExpr (core, control) {
+  /* [MemberExpr, …args] */
+  return {error: 'not implemented'};
+}
+
+function stepCXXDefaultArgExpr (core, control) {
+  return stepParenExpr(core, control);
+}
+
 const stepVarDecl = function (core, control) {
   // VarDecl children are [type, init?] (init is optional).
   const {node, step} = control;
@@ -867,6 +876,21 @@ const stepRecordDecl = function (core, control) {
   return {control: control.cont, result: null, effects};
 };
 
+function stepCXXRecordDecl (core, control) {
+  /* {name} [?, …members] */
+  return {error: 'not implemented'};
+}
+
+function stepCXXMethodDecl (core, control) {
+  /* {define} [name, type, block] */
+  return {error: 'not implemented'};
+}
+
+function stepCXXConstructorDecl (core, control) {
+  /* {define, implicit} [name, …args] */
+  return {error: 'not implemented'};
+}
+
 const getStep = function (core) {
   const {control} = core;
   switch (control.node[0]) {
@@ -942,6 +966,10 @@ const getStep = function (core) {
     return stepInitListExpr(core, control);
   case 'ConditionalOperator':
     return stepConditionalOperator(core, control);
+  case 'CXXMemberCallExpr':
+    return stepCXXMemberCallExpr(core, control);
+  case 'CXXDefaultArgExpr':
+    return stepCXXDefaultArgExpr(core, control);
   case 'BuiltinType':
     return stepBuiltinType(core, control);
   case 'PointerType':
@@ -970,6 +998,12 @@ const getStep = function (core) {
     return stepTypedefDecl(core, control);
   case 'RecordDecl':
     return stepRecordDecl(core, control);
+  case 'CXXRecordDecl':
+    return stepCXXRecordDecl(core, control);
+  case 'CXXMethodDecl':
+    return stepCXXMethodDecl(core, control);
+  case 'CXXConstructorDecl':
+    return stepCXXConstructorDecl(core, control);
   case 'FieldDecl':
     return stepFieldDecl(core, control);
   }
