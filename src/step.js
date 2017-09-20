@@ -648,7 +648,7 @@ const stepConditionalOperator = function (core, control) {
 
 function stepCXXMemberCallExpr (core, control) {
   /* [MemberExpr, …args] */
-  return {error: 'not implemented'};
+  return {error: 'not implemented: CXXMemberCallExpr'};
 }
 
 function stepCXXDefaultArgExpr (core, control) {
@@ -878,17 +878,17 @@ const stepRecordDecl = function (core, control) {
 
 function stepCXXRecordDecl (core, control) {
   /* {name} [?, …members] */
-  return {error: 'not implemented'};
+  return {error: 'not implemented: CXXRecordDecl'};
 }
 
 function stepCXXMethodDecl (core, control) {
   /* {define} [name, type, block] */
-  return {error: 'not implemented'};
+  return {error: 'not implemented: CXXMethodDecl'};
 }
 
 function stepCXXConstructorDecl (core, control) {
   /* {define, implicit} [name, …args] */
-  return {error: 'not implemented'};
+  return {error: 'not implemented: CXXConstructorDecl'};
 }
 
 const getStep = function (core) {
