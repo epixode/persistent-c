@@ -27,7 +27,7 @@ import effects from './effects';
 
 export {functionType, pointerType, arrayType, decayedType, builtinTypes} from './type';
 export {
-  IntegralValue, FloatingValue, PointerValue, stringValue, makeRef} from './value';
+  IntegralValue, FloatingValue, PointerValue, stringValue, ArrayValue, makeRef} from './value';
 export {readValue, writeValue, readString} from './memory';
 export {step} from './step';
 export {findClosestFunctionScope} from './scope';
