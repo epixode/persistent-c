@@ -22,7 +22,6 @@ import {builtinTypes, pointerType} from './type';
 import {PointerValue, stringValue, BuiltinValue, FunctionValue} from './value';
 import {allocate, readValue, writeValue, readString} from './memory';
 import {step} from './step';
-import {finalizeVarDecl} from './decl';
 import effects from './effects';
 
 export {functionType, pointerType, arrayType, decayedType, builtinTypes} from './type';
