@@ -676,7 +676,6 @@ const stepVarDecl = function (core, control) {
   const preType = step === 1 ? core.result : control.type;
   const preInit = step === 2 ? core.result : null;
   const {type, init} = finalizeVarDecl(core, preType, preInit);
-  console.log('vardecl', name, type, init);
   const effects = [['vardecl', name, type, init]];
   return {control: control.cont, result: null, effects};
 };
