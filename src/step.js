@@ -381,13 +381,12 @@ const stepMemberExpr = function (core, control) {
     const nameNode = control.node[2][0];
     const identifier = nameNode[1].identifier;
     const fieldDecl = recordType.fieldMap[identifier];
-    const fieldRefType = fieldDecl.refType;
     const fieldAddress = ref.address + fieldDecl.offset;
-    const fieldRef = new PointerValue(fieldRefType, fieldAddress);
+    const fieldRef = new PointerValue(fieldDecl.refType, fieldAddress);
     let result;
     if (control.mode === 'type') {
-      result = fieldType;
-    } else if (control.mode === 'lvalue') {
+      result = fieldDecl.type;
+    } else if (control.mode === 'lvalue' || fieldDecl.type.composite) {
       result = fieldRef;
     } else {
       result = readValue(core, fieldRef);
