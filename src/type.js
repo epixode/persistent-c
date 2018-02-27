@@ -29,6 +29,7 @@ export const arrayType = function (elemType, elemCount) {
   const type = new Type('array', elemCount && elemType.size * elemCount.toInteger());
   type.elem = elemType;
   type.count = elemCount;
+  type.composite = true;
   return type;
 };
 
@@ -52,6 +53,7 @@ export const recordType = function (name, fields) {
   type.name = name;
   type.fields = fields.map(field => field.name);
   type.fieldMap = fieldMap;
+  type.composite = true;
   return type;
 };
 
