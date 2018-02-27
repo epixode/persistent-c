@@ -320,7 +320,10 @@ const evalFloatingBinaryOperation = function (op, v1, v2) {
 export const evalBinaryOperation = function (opcode, lhs, rhs) {
   // Relational operators
   if (isRelational(opcode)) {
-    const result = evalRelationalOperation(opcode, lhs.number, rhs.number);
+    const result =
+      lhs instanceof PointerValue
+        ? evalRelationalOperation(opcode, lhs.address, rhs.address)
+        : evalRelationalOperation(opcode, lhs.number, rhs.number);
     return new IntegralValue(builtinTypes['int'], result ? 1 : 0);
   }
   // Integer arithmetic
