@@ -25,6 +25,9 @@ function buildInitValue (core, type, init) {
   if (type.kind === 'array') {
     return buildArrayInitValue(core, type, init);
   }
+  if (type.kind === 'record') {
+    return buildRecordInitValue(core, type, init);
+  }
   return init || zeroAtType(type);
 }
 
@@ -47,4 +50,19 @@ function buildArrayInitValue (core, type, init) {
     console.warn("unsupported array init", init);
   }
   return new ArrayValue(type, elements);
+}
+
+function buildRecordInitValue (core, type, init) {
+  const {fields, fieldMap} = type;
+  const props = {};
+  const fieldCount = fields.length;
+  for (let fieldPos = 0; fieldPos < fieldCount; fieldPos += 1) {
+    const fieldInit = init[fieldPos];
+    if (fieldInit) {
+      const name = fields[fieldPos];
+      const {type: fieldType} = fieldMap[name];
+      props[name] = buildInitValue(core, fieldType, fieldInit);
+    }
+  }
+  return new RecordValue(type, props);
 }
