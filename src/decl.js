@@ -23,10 +23,10 @@ function arraySize (init) {
 
 function buildInitValue (core, type, init) {
   if (type.kind === 'array') {
-    return buildArrayInitValue(core, type, init);
+    return init && buildArrayInitValue(core, type, init);
   }
   if (type.kind === 'record') {
-    return buildRecordInitValue(core, type, init);
+    return init && buildRecordInitValue(core, type, init);
   }
   return init || zeroAtType(type);
 }
