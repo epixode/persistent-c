@@ -240,6 +240,15 @@ export const unpackValue = function (view, offset, type, littleEndian, core) {
         }
         return new ArrayValue(type, elements);
       }
+    case 'record':
+      {
+        const props = {};
+        for (let name of type.fields) {
+          const {offset: fieldOffset, type: fieldType} = type.fieldMap[name];
+          props[name] = unpackValue(view, offset + fieldOffset, fieldType, littleEndian, core);
+        }
+        return new RecordValue(type, props);
+      }
     case 'pointer': {
       if (type.pointee.kind === 'function') {
         const codePtr = view.getUint16(offset, littleEndian);
