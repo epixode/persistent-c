@@ -143,6 +143,25 @@ ArrayValue.prototype.pack = function (view, offset, littleEndian) {
   });
 };
 
+export function RecordValue (type, props) {
+  this.type = type;
+  this.props = props;
+};
+RecordValue.prototype.toString = function () {
+  return `record`;
+};
+RecordValue.prototype.pack = function (view, offset, littleEndian) {
+  const {type: {fields, fieldMap}, props} = this;
+  // {offset, type, refType}
+  fields.forEach(function (name) {
+    const value = props[name];
+    if (value) {
+      const {offset: fieldOffset} = fieldMap[name];
+      packValue(view, offset + fieldOffset, value, littleEndian);
+    }
+  });
+};
+
 export function FunctionValue (type, codePtr, name, body, decl) {
   this.type = pointerType(type);
   this.codePtr = codePtr;
