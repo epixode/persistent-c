@@ -153,13 +153,14 @@ RecordValue.prototype.toString = function () {
 RecordValue.prototype.pack = function (view, offset, littleEndian) {
   const {type: {fields, fieldMap}, props} = this;
   // {offset, type, refType}
-  fields.forEach(function (name) {
+  for (let name of fields) {
     const value = props[name];
     if (value) {
       const {offset: fieldOffset} = fieldMap[name];
+      console.log('pack field', offset + fieldOffset, value);
       packValue(view, offset + fieldOffset, value, littleEndian);
     }
-  });
+  }
 };
 
 export function FunctionValue (type, codePtr, name, body, decl) {
