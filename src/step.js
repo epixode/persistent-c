@@ -654,6 +654,10 @@ function stepCXXDefaultArgExpr (core, control) {
   return stepParenExpr(core, control);
 }
 
+function stepImplicitValueInitExpr (core, control) {
+  return {control: control.cont, result: null};
+}
+
 const stepVarDecl = function (core, control) {
   // VarDecl children are [type, init?] (init is optional).
   const {node, step} = control;
@@ -971,6 +975,8 @@ const getStep = function (core) {
     return stepCXXMemberCallExpr(core, control);
   case 'CXXDefaultArgExpr':
     return stepCXXDefaultArgExpr(core, control);
+  case 'ImplicitValueInitExpr':
+    return stepImplicitValueInitExpr(core, control);
   case 'BuiltinType':
     return stepBuiltinType(core, control);
   case 'PointerType':
