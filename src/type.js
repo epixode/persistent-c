@@ -33,6 +33,19 @@ export const arrayType = function (elemType, elemCount) {
   return type;
 };
 
+export function resolveIncompleteArrayType (type, dims) {
+  function resolve (type, rank) {
+    if (rank === dims.length) {
+      return type;
+    } else {
+      const elemType = resolve(type.elem, rank + 1);
+      const elemCount = new IntegralValue(builtinTypes['unsigned int'], type.count || dims[rank]);
+      return arrayType(elemType, elemCount);
+    }
+  }
+  return resolve(type, 0);
+}
+
 export const decayedType = function (origType) {
   const pointerSize = getPointerSize(origType);
   const type = new Type('pointer', pointerSize);
@@ -81,23 +94,6 @@ export const lubType = function (t1, t2) {
   // This function should compute least-upper-bound of (t1, t2), but it is
   // probably actually always used with t1 == t2.
   return t1;
-};
-
-export const arraySize = function (val) {
-  const result = [];
-  while (Array.isArray(val)) {
-    result.push(val.length);
-    val = val[0];
-  }
-  return result;
-};
-
-export const arrayGroundType = function (type) {
-  if (type.kind === 'array') {
-    return arrayGroundType(type.elem);
-  } else {
-    return type;
-  }
 };
 
 function layoutRecord (fields) {

@@ -1,38 +1,50 @@
 
-import {builtinTypes, arrayType, arraySize, arrayGroundType} from './type';
-import {IntegralValue, ArrayValue, zeroAtType} from './value';
+import {pointerType, resolveIncompleteArrayType} from './type';
+import {PointerValue, ArrayValue, RecordValue, zeroAtType} from './value';
+import {readValue} from './memory';
 
-export const finalizeVarDecl = function (type, init) {
+export const finalizeVarDecl = function (core, type, init) {
   if (init && type.kind === 'array') {
-    // Special considerations for array types:
-    // - the initialization list is a (javascript array of)+ values;
-    // - an incomplete array type has an undefined element count, which is
-    //   filled in using the length of the initialization list.
+    /* Resolve array dimensions using the initialization list. */
     const dims = arraySize(init);
-    type = resolveArraySize(type, dims, 0);
-    const nullElem = zeroAtType(arrayGroundType(type));
-    init = buildArrayInitValue(type, init, nullElem);
+    type = resolveIncompleteArrayType(type, dims);
   }
-  return {type, init};
+  return {type, init: buildInitValue(core, type, init)};
 };
 
-const resolveArraySize = function (type, dims, rank) {
-  if (rank === dims.length) {
-    return type;
+function arraySize (init) {
+  const result = [];
+  while (Array.isArray(init)) {
+    result.push(init.length);
+    init = init[0];
   }
-  const elemType = resolveArraySize(type.elem, dims, rank + 1);
-  const elemCount = new IntegralValue(builtinTypes['unsigned int'], type.count || dims[rank]);
-  return arrayType(elemType, elemCount);
-};
+  return result;
+}
 
-const buildArrayInitValue = function (type, init, nullElem) {
-  if (type.kind !== 'array') {
-    return init || nullElem;
+function buildInitValue (core, type, init) {
+  if (type.kind === 'array') {
+    return buildArrayInitValue(core, type, init);
   }
+  return init || zeroAtType(type);
+}
+
+function buildArrayInitValue (core, type, init) {
   const elements = [];
   const elemCount = type.count.toInteger();
-  for (let i = 0; i < elemCount; i += 1) {
-    elements.push(buildArrayInitValue(type.elem, init && init[i], nullElem));
+  if (Array.isArray(init)) {
+    for (let i = 0; i < elemCount; i += 1) {
+      elements.push(buildInitValue(core, type.elem, init && init[i]));
+    }
+  } else if (init instanceof PointerValue) {
+    /* Initialization from pointer value (string literal) */
+    const refType = pointerType(type.elem);
+    const ref = new PointerValue(refType, init.address);
+    for (let i = 0; i < elemCount; i += 1) {
+      elements.push(readValue(core, ref));
+      ref.address += type.elem.size;
+    }
+  } else {
+    console.warn("unsupported array init", init);
   }
   return new ArrayValue(type, elements);
-};
+}
