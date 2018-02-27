@@ -42,7 +42,9 @@ function buildArrayInitValue (core, type, init) {
     /* Initialization from pointer value (string literal) */
     const refType = pointerType(type.elem);
     const ref = new PointerValue(refType, init.address);
-    for (let i = 0; i < elemCount; i += 1) {
+    /* init is a PointerValue with a definite-sized array type */
+    const count = Math.min(elemCount, init.type.size);
+    for (let i = 0; i < count; i += 1) {
       elements.push(readValue(core, ref));
       ref.address += type.elem.size;
     }
