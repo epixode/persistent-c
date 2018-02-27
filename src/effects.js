@@ -137,7 +137,7 @@ function declareGlobalVar (core, name, type, init) {
 };
 
 function declareRecord (core, name, type) {
-  core.recordDecls[name] = type;
+  core.recordDecls.set(name, type);
 };
 
 /* XXX check if decl can be omitted, it is only used because directives are

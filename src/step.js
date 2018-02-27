@@ -14,7 +14,8 @@ with the seq property set to true.  In C, sequence points occur:
 */
 
 import {
-  builtinTypes, pointerType, functionType, arrayType, decayedType, recordType} from './type';
+  builtinTypes, pointerType, functionType, arrayType, decayedType,
+  recordType, forwardRecordType} from './type';
 import {
   IntegralValue, FloatingValue, PointerValue, BuiltinValue, FunctionValue, ArrayValue,
   evalUnaryOperation, evalBinaryOperation, evalCast, makeRef} from './value';
@@ -382,7 +383,7 @@ const stepMemberExpr = function (core, control) {
     const identifier = nameNode[1].identifier;
     const fieldDecl = recordType.fieldMap[identifier];
     const fieldAddress = ref.address + fieldDecl.offset;
-    const fieldRef = new PointerValue(fieldDecl.refType, fieldAddress);
+    const fieldRef = new PointerValue(pointerType(fieldDecl.type), fieldAddress);
     let result;
     if (control.mode === 'type') {
       result = fieldDecl.type;
@@ -837,7 +838,8 @@ const stepDecayedType = function (core, control) {
 
 const stepRecordType = function (core, control) {
   const {node} = control;
-  const type = core.recordDecls[node[1].name];
+  const name = node[1].name;
+  const type = core.recordDecls.get(name) || forwardRecordType(name);
   return {control: control.cont, result: type};
 };
 

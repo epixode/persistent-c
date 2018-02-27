@@ -70,6 +70,13 @@ export const recordType = function (name, fields) {
   return type;
 };
 
+export const forwardRecordType = function (name) {
+  const type = new Type('record', 0);
+  type.name = name;
+  type.forward = true;
+  return type;
+};
+
 export const builtinTypes = {};
 const addBuiltinType = function (repr, size) {
   const type = new Type('builtin', size);
@@ -101,9 +108,22 @@ function layoutRecord (fields) {
   const fieldMap = {};
   fields.forEach(function (field) {
     const {name, type} = field;
-    const refType = pointerType(type);
-    fieldMap[name] = {offset: size, type, refType};
+    fieldMap[name] = {offset: size, type};
     size += type.size;
   });
   return {size, fieldMap};
+}
+
+export function closeTypeDecls (core) {
+  const {recordDecls} = core;
+  console.log('closing', recordDecls);
+  for (let recordName of recordDecls.keys()) {
+    const {fields, fieldMap} = recordDecls.get(recordName);
+    for (let fieldName of fields) {
+      const type = fieldMap[fieldName].type;
+      if (type.forward && type.kind === 'record') {
+        Object.assign(type, recordDecls.get(type.name));
+      }
+    }
+  }
 }

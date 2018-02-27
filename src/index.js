@@ -18,7 +18,7 @@ core: {
 
 import Immutable from 'immutable';
 
-import {builtinTypes, pointerType} from './type';
+import {builtinTypes, pointerType, closeTypeDecls} from './type';
 import {PointerValue, stringValue, BuiltinValue, FunctionValue} from './value';
 import {allocate, readValue, writeValue, readString} from './memory';
 import {step} from './step';
@@ -40,7 +40,7 @@ export function makeCore (memorySize) {
     memorySize = 0x10000;
   }
   const globalMap = {};
-  const recordDecls = {};
+  const recordDecls = new Map();
   const functions = [null];
   const memory = allocate(memorySize);
   const memoryLog = Immutable.List();
@@ -55,6 +55,7 @@ export function execDecls (core, decls) {
     copyNodeStrings(core, declNode);
     stepThroughNode(core, declNode, declHandlers);
   });
+  closeTypeDecls(core);
 };
 const stepThroughNode = function (core, node, handlers) {
   core.control = {node, step: 0};
