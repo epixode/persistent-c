@@ -378,6 +378,9 @@ export const evalUnaryOperation = function (opcode, operand) {
 };
 
 export const evalCast = function (type, operand) {
+  if (operand.type === type) {
+    return operand;
+  }
   if (type.kind === 'builtin') {
     if (/^(unsigned )?char$/.test(type.repr)) {
       return new IntegralValue(type, operand.toInteger() & 0xff);
