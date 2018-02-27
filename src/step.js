@@ -704,9 +704,10 @@ const stepFloatingLiteral = function (core, control) {
 };
 
 const stepStringLiteral = function (core, control) {
+  const ref = core.literals.get(control.node);
   return {
     control: control.cont,
-    result: control.node[1].ref
+    result: ref
   };
 };
 

@@ -46,7 +46,8 @@ export function makeCore (memorySize) {
   const memoryLog = Immutable.List();
   const heapStart = 0x100;
   const scope = {key: 0, limit: memorySize};
-  return {globalMap, recordDecls, functions, memory, memoryLog, heapStart, scope};
+  const literals = new WeakMap();
+  return {globalMap, recordDecls, functions, memory, memoryLog, heapStart, scope, literals};
 };
 
 export function execDecls (core, decls) {
@@ -97,7 +98,7 @@ function copyNodeStrings (core, node) {
       const ref = new PointerValue(value.type, core.heapStart);
       core.memory = writeValue(core.memory, ref, value);
       core.heapStart += value.type.size;
-      node[1].ref = ref; // TODO: use a WeakMap in core?
+      core.literals.set(node, ref);
     }
   });
 }
