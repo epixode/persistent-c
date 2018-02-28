@@ -377,20 +377,24 @@ const stepMemberExpr = function (core, control) {
       control: enterExpr(control.node[2][1], {...control, step: 1}, {mode})
     };
   } else {
-    const ref = core.result; // pointer to record
-    const recordType = ref.type.pointee;
     const nameNode = control.node[2][0];
     const identifier = nameNode[1].identifier;
-    const fieldDecl = recordType.fieldMap[identifier];
-    const fieldAddress = ref.address + fieldDecl.offset;
-    const fieldRef = new PointerValue(pointerType(fieldDecl.type), fieldAddress);
     let result;
     if (control.mode === 'type') {
+      const recordType = core.result;
+      const fieldDecl = recordType.fieldMap[identifier];
       result = fieldDecl.type;
-    } else if (control.mode === 'lvalue' || fieldDecl.type.composite) {
-      result = fieldRef;
     } else {
-      result = readValue(core, fieldRef);
+      const ref = core.result; // pointer to record
+      const recordType = ref.type.pointee;
+      const fieldDecl = recordType.fieldMap[identifier];
+      const fieldAddress = ref.address + fieldDecl.offset;
+      const fieldRef = new PointerValue(pointerType(fieldDecl.type), fieldAddress);
+      if (control.mode === 'lvalue' || fieldDecl.type.composite) {
+        result = fieldRef;
+      } else {
+        result = readValue(core, fieldRef);
+      }
     }
     return {control: control.cont, result};
   }
