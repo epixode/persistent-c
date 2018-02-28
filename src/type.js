@@ -33,19 +33,6 @@ export const arrayType = function (elemType, elemCount) {
   return type;
 };
 
-export function resolveIncompleteArrayType (type, dims) {
-  function resolve (type, rank) {
-    if (rank === dims.length) {
-      return type;
-    } else {
-      const elemType = resolve(type.elem, rank + 1);
-      const elemCount = new IntegralValue(builtinTypes['unsigned int'], type.count || dims[rank]);
-      return arrayType(elemType, elemCount);
-    }
-  }
-  return resolve(type, 0);
-}
-
 export const decayedType = function (origType) {
   const pointerSize = getPointerSize(origType);
   const type = new Type('pointer', pointerSize);

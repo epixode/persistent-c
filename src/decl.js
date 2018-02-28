@@ -1,6 +1,6 @@
 
-import {pointerType, resolveIncompleteArrayType} from './type';
-import {PointerValue, ArrayValue, RecordValue, zeroAtType} from './value';
+import {pointerType, arrayType, builtinTypes} from './type';
+import {PointerValue, ArrayValue, RecordValue, IntegralValue, zeroAtType} from './value';
 import {readValue} from './memory';
 
 export const finalizeVarDecl = function (core, type, init) {
@@ -11,6 +11,19 @@ export const finalizeVarDecl = function (core, type, init) {
   }
   return {type, init: buildInitValue(core, type, init)};
 };
+
+function resolveIncompleteArrayType (type, dims) {
+  function resolve (type, rank) {
+    if (rank === dims.length) {
+      return type;
+    } else {
+      const elemType = resolve(type.elem, rank + 1);
+      const elemCount = new IntegralValue(builtinTypes['unsigned int'], type.count || dims[rank]);
+      return arrayType(elemType, elemCount);
+    }
+  }
+  return resolve(type, 0);
+}
 
 function arraySize (init) {
   const result = [];
@@ -23,10 +36,10 @@ function arraySize (init) {
 
 function buildInitValue (core, type, init) {
   if (type.kind === 'array') {
-    return init && buildArrayInitValue(core, type, init);
+    return buildArrayInitValue(core, type, init);
   }
   if (type.kind === 'record') {
-    return init && buildRecordInitValue(core, type, init);
+    return buildRecordInitValue(core, type, init);
   }
   return init || zeroAtType(type);
 }
@@ -59,7 +72,7 @@ function buildRecordInitValue (core, type, init) {
   const props = {};
   const fieldCount = fields.length;
   for (let fieldPos = 0; fieldPos < fieldCount; fieldPos += 1) {
-    const fieldInit = init[fieldPos];
+    const fieldInit = init && init[fieldPos];
     if (fieldInit) {
       const name = fields[fieldPos];
       const {type: fieldType} = fieldMap[name];
