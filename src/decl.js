@@ -47,7 +47,9 @@ function buildInitValue (core, type, init) {
 function buildArrayInitValue (core, type, init) {
   const elements = [];
   const elemCount = type.count.toInteger();
-  if (Array.isArray(init)) {
+  if (init === null) {
+    /* Uninitialized array */
+  } else if (Array.isArray(init)) {
     for (let i = 0; i < elemCount; i += 1) {
       elements.push(buildInitValue(core, type.elem, init && init[i]));
     }
