@@ -217,6 +217,10 @@ const stepReturnStmt = function (core, control) {
   return {effects};
 };
 
+const stepNullStmt = function (core, control) {
+  return {control: control.cont, result: null};
+};
+
 const stepCallExpr = function (core, control) {
   const {node, step} = control;
   // Numeric steps accumulate the results of evaluating each child expression.
@@ -922,6 +926,8 @@ const getStep = function (core) {
     return stepIfStmt(core, control);
   case 'ReturnStmt':
     return stepReturnStmt(core, control);
+  case 'NullStmt':
+    return stepNullStmt(core, control);
   case 'VarDecl':
     return stepVarDecl(core, control);
   case 'ParenExpr':
